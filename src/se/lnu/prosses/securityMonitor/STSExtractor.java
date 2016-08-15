@@ -6,7 +6,6 @@ import java.util.Hashtable;
 import java.util.List;
 import java.util.Map;
 
-import org.eclipse.jdt.core.ICompilationUnit;
 import org.eclipse.jdt.core.JavaCore;
 import org.eclipse.jdt.core.dom.AST;
 import org.eclipse.jdt.core.dom.ASTNode;
@@ -26,6 +25,7 @@ import org.eclipse.jdt.core.dom.ReturnStatement;
 import org.eclipse.jdt.core.dom.SimpleName;
 import org.eclipse.jdt.core.dom.SingleVariableDeclaration;
 import org.eclipse.jdt.core.dom.Statement;
+import org.eclipse.jdt.core.dom.StringLiteral;
 import org.eclipse.jdt.core.dom.TryStatement;
 import org.eclipse.jdt.core.dom.TypeDeclaration;
 import org.eclipse.jdt.core.dom.VariableDeclarationFragment;
@@ -40,6 +40,7 @@ public class STSExtractor {
 	public ArrayList<String> entryPoints;
 	private STS sts;
 	private Hashtable<String, TypeDeclaration> classes = new Hashtable<>();
+	final static String DUMMY_METHOD = "se.lnu.SL.def";
 	
 	public STSExtractor(ArrayList<String> includingFilter, ArrayList<String> excludingFilter, ArrayList<String> entryPoints) {
 		this.includingFilter = includingFilter;
@@ -93,46 +94,49 @@ public class STSExtractor {
 	private Integer processMethod(MethodDeclaration methodDeclaration) {
 		List<Statement> statements = methodDeclaration.getBody().statements();
 		Integer location = 0;
-		String prefix = methodDeclaration.resolveBinding().getDeclaringClass().getQualifiedName().replaceAll("\\.", "_") + "_" + methodDeclaration.getName();
+ 		String prefix = methodDeclaration.resolveBinding().getDeclaringClass().getQualifiedName().replaceAll("\\.", "_") + "_" + methodDeclaration.getName();
+		Hashtable<String, String> SL = new Hashtable<String, String>();
 		for (Statement statement : statements) {
-			location = processStatement(statement, "", new Hashtable<String, String>(), location, prefix, new Hashtable<Integer, Integer>());
+			location = processStatement(statement, "", SL, location, prefix, new Hashtable<Integer, Integer>(), SL);
 		}
 		return location;
 	}
 	
-	private Integer processStatement(Statement statement, String XReturn, Hashtable<String, String> RS, Integer initialLocation, String prefix, Hashtable<Integer, Integer> breakContinueLocations) {
+	private Integer processStatement(Statement statement, String XReturn, Hashtable<String, String> RS, Integer initialLocation, String prefix, Hashtable<Integer, Integer> breakContinueLocations, Hashtable<String, String> SL) {
 		Integer finalLocation = initialLocation; 
 		switch(statement.getNodeType()){
 		case ASTNode.EXPRESSION_STATEMENT:
 			Expression expression = ((ExpressionStatement) statement).getExpression();
-			if(expression.getNodeType()==ASTNode.METHOD_INVOCATION && canProcessMethod((MethodInvocation) expression)){
+			if(expression.getNodeType()==ASTNode.METHOD_INVOCATION && (((MethodInvocation) expression).resolveMethodBinding().getDeclaringClass().getQualifiedName() + "." + ((MethodInvocation) expression).getName()).equals(DUMMY_METHOD)){
+				MethodInvocation dummyMethodInvocation = (MethodInvocation) expression;
+				finalLocation = processDummyMethodInvocation(dummyMethodInvocation, XReturn, RS, initialLocation, prefix, breakContinueLocations, SL);
+			}else if(expression.getNodeType()==ASTNode.METHOD_INVOCATION && canProcessMethod((MethodInvocation) expression)){
 				MethodInvocation methodInvocation = (MethodInvocation) expression;
-				finalLocation = processMethodInvocation(methodInvocation, XReturn, RS, initialLocation, prefix, breakContinueLocations);
+				finalLocation = processMethodInvocation(methodInvocation, XReturn, RS, initialLocation, prefix, breakContinueLocations, SL);
 			}else if(expression.getNodeType()==ASTNode.ASSIGNMENT){
 				Assignment assignment = (Assignment)expression;
-				finalLocation = processAssignment(assignment, XReturn, RS, initialLocation, prefix, breakContinueLocations);
+				finalLocation = processAssignment(assignment, XReturn, RS, initialLocation, prefix, breakContinueLocations, SL);
 			}
 			break;
 		case ASTNode.IF_STATEMENT:
 			IfStatement ifStatement = (IfStatement) statement;
-			finalLocation = processIfStatement(ifStatement, XReturn, RS, initialLocation, prefix, breakContinueLocations);
+			finalLocation = processIfStatement(ifStatement, XReturn, RS, initialLocation, prefix, breakContinueLocations, SL);
 			break;
 		case ASTNode.WHILE_STATEMENT:
 			WhileStatement whileStatement = (WhileStatement) statement;
-			finalLocation = processWhileStatement(whileStatement, XReturn, RS, initialLocation, prefix, breakContinueLocations);
+			finalLocation = processWhileStatement(whileStatement, XReturn, RS, initialLocation, prefix, breakContinueLocations, SL);
 			break;
 		case ASTNode.RETURN_STATEMENT:
 			ReturnStatement returnStatement = (ReturnStatement) statement;
-			finalLocation = processReturnStatement(returnStatement, XReturn, RS, initialLocation, prefix, breakContinueLocations);
+			finalLocation = processReturnStatement(returnStatement, XReturn, RS, initialLocation, prefix, breakContinueLocations, SL);
 			break;
 		case ASTNode.TRY_STATEMENT:
-			@SuppressWarnings("unused")
 			TryStatement tryStatement = (TryStatement) statement;
-			finalLocation = processBlock(tryStatement.getBody(), XReturn, RS, initialLocation, prefix, breakContinueLocations);
+			finalLocation = processBlock(tryStatement.getBody(), XReturn, RS, initialLocation, prefix, breakContinueLocations, SL);
 			break;
 		case ASTNode.BLOCK:
 			Block block = (Block) statement;
-			finalLocation = processBlock(block, XReturn, RS, initialLocation, prefix, breakContinueLocations);
+			finalLocation = processBlock(block, XReturn, RS, initialLocation, prefix, breakContinueLocations, SL);
 			break;
 		case ASTNode.BREAK_STATEMENT:
 			breakContinueLocations.put(finalLocation, 1);
@@ -142,28 +146,40 @@ public class STSExtractor {
 			break;
 		case ASTNode.VARIABLE_DECLARATION_STATEMENT:
 			VariableDeclarationStatement variableDeclarationStatement = (VariableDeclarationStatement) statement;
-			finalLocation = processVariableDeclarationFragment((VariableDeclarationFragment)variableDeclarationStatement.fragments().get(0), XReturn, RS, initialLocation, prefix, breakContinueLocations);
+			finalLocation = processVariableDeclarationFragment((VariableDeclarationFragment)variableDeclarationStatement.fragments().get(0), XReturn, RS, initialLocation, prefix, breakContinueLocations, SL);
 			break;
 		default:
 		}	
 		return finalLocation;
 	}
 
-	private Integer processVariableDeclarationFragment(VariableDeclarationFragment variableDeclarationFragment,	String XReturn, Hashtable<String, String> RS, Integer initialLocation, String prefix, Hashtable<Integer, Integer> breakContinueLocations) {
+	private Integer processDummyMethodInvocation(MethodInvocation dummyMethodInvocation, String XReturn, Hashtable<String, String> RS, Integer initialLocation, String prefix, Hashtable<Integer, Integer> breakContinueLocations, Hashtable<String, String> SL) {
+		 @SuppressWarnings("unchecked")
+		List<StringLiteral> parameters = dummyMethodInvocation.arguments();
+		if(RS.contains(parameters.get(0).getLiteralValue())){
+			SL.put(RS.get(parameters.get(0).getLiteralValue()) + "," + parameters.get(1).getLiteralValue(), parameters.get(2).getLiteralValue());
+		}else {
+			SL.put(prefix + "_" + parameters.get(0).getLiteralValue() + "," + parameters.get(1).getLiteralValue(), parameters.get(2).getLiteralValue());
+		}
+		return initialLocation;
+	}
+
+	private Integer processVariableDeclarationFragment(VariableDeclarationFragment variableDeclarationFragment,	String XReturn, Hashtable<String, String> RS, Integer initialLocation, String prefix, Hashtable<Integer, Integer> breakContinueLocations, Hashtable<String, String> SL) {
 		Integer finalLocation = initialLocation;
 		if(variableDeclarationFragment.getInitializer() instanceof MethodInvocation && canProcessMethod((MethodInvocation) variableDeclarationFragment.getInitializer())){
 			MethodInvocation methodInvocation = (MethodInvocation) variableDeclarationFragment.getInitializer();
 			String declaringClass = methodInvocation.resolveMethodBinding().getDeclaringClass().getQualifiedName();
 			String methodFullName = declaringClass.replaceAll("\\.", "_") + "_" + methodInvocation.getName();
-			Transition transition = new Transition(methodFullName, "true", getPassByValueMethodArgumentsUpdater(methodInvocation, RS, prefix));
+			Transition transition = new Transition(methodFullName, "true", getPassByValueMethodArgumentsUpdater(methodInvocation, RS, prefix) + getSecurityAssignments(SL, true));
 			finalLocation = newLocation();
 			sts.addVertex(initialLocation);
 			sts.addVertex(finalLocation);
 			sts.addEdge(initialLocation, finalLocation, transition);
 			Hashtable<String, String> newRS = getRenamingRules(methodInvocation, prefix);
-			finalLocation = processBlock(getMethodBody(methodInvocation, newRS), variableDeclarationFragment.getName().toString(), newRS, finalLocation, prefix + "_" + methodInvocation.getExpression().toString().replaceAll("\\.", "_") + "_" + methodInvocation.getName(), breakContinueLocations);
-		}else{
-			Transition transition = new Transition(Transition.TAU, "true", rename(variableDeclarationFragment.getName(), RS, prefix) + "=" + rename(variableDeclarationFragment.getInitializer(), RS, prefix));
+			finalLocation = processBlock(getMethodBody(methodInvocation, newRS), variableDeclarationFragment.getName().toString(), newRS, finalLocation, prefix + "_" + 
+			(methodInvocation.getExpression()==null ? "" : methodInvocation.getExpression().toString()).replaceAll("\\.", "_") + "_" + methodInvocation.getName(), breakContinueLocations, SL);
+		}else if (variableDeclarationFragment.getInitializer()!=null){
+			Transition transition = new Transition(Transition.TAU, "true", rename(variableDeclarationFragment.getName(), RS, prefix) + "=" + rename(variableDeclarationFragment.getInitializer(), RS, prefix) + getSecurityAssignments(SL, true));
 			finalLocation = newLocation();
 			sts.addVertex(initialLocation);
 			sts.addVertex(finalLocation);
@@ -172,11 +188,11 @@ public class STSExtractor {
 		return finalLocation;
 	}
 
-	private Integer processReturnStatement(ReturnStatement returnStatement, String XReturn, Hashtable<String, String> RS, Integer initialLocation, String prefix, Hashtable<Integer, Integer> breakContinueLocations) {
+	private Integer processReturnStatement(ReturnStatement returnStatement, String XReturn, Hashtable<String, String> RS, Integer initialLocation, String prefix, Hashtable<Integer, Integer> breakContinueLocations, Hashtable<String, String> SL) {
 		Integer finalLocation = initialLocation;
 		Expression expression = returnStatement.getExpression();
 		if(expression!=null){
-			Transition transition = new Transition(Transition.TAU, "true", XReturn + "=" + rename(expression, RS, prefix));
+			Transition transition = new Transition(Transition.TAU, "true", XReturn + "=" + rename(expression, RS, prefix) + getSecurityAssignments(SL, true));
 			finalLocation = newLocation();
 			sts.addVertex(initialLocation);
 			sts.addVertex(finalLocation);
@@ -185,21 +201,22 @@ public class STSExtractor {
 		return finalLocation;
 	}
 
-	private Integer processAssignment(Assignment assignment, String XReturn, Hashtable<String, String> RS, Integer initialLocation, String prefix, Hashtable<Integer, Integer> breakContinueLocations) {
+	private Integer processAssignment(Assignment assignment, String XReturn, Hashtable<String, String> RS, Integer initialLocation, String prefix, Hashtable<Integer, Integer> breakContinueLocations, Hashtable<String, String> SL) {
 		Integer finalLocation = initialLocation;
 		if(assignment.getRightHandSide() instanceof MethodInvocation && canProcessMethod((MethodInvocation) assignment.getRightHandSide())){
 			MethodInvocation methodInvocation = (MethodInvocation) assignment.getRightHandSide();
 			String declaringClass = methodInvocation.resolveMethodBinding().getDeclaringClass().getQualifiedName();
 			String methodFullName = declaringClass.replaceAll("\\.", "_") + "_" + methodInvocation.getName();
-			Transition transition = new Transition(methodFullName, "true", getPassByValueMethodArgumentsUpdater(methodInvocation, RS, prefix));
+			Transition transition = new Transition(methodFullName, "true", getPassByValueMethodArgumentsUpdater(methodInvocation, RS, prefix) + getSecurityAssignments(SL, true));
 			finalLocation = newLocation();
 			sts.addVertex(initialLocation);
 			sts.addVertex(finalLocation);
 			sts.addEdge(initialLocation, finalLocation, transition);
 			Hashtable<String, String> newRS = getRenamingRules(methodInvocation, prefix);
-			finalLocation = processBlock(getMethodBody(methodInvocation, newRS), assignment.getLeftHandSide().toString(), newRS, finalLocation, prefix + "_" + methodInvocation.getExpression().toString().replaceAll("\\.", "_") + "_" + methodInvocation.getName(), breakContinueLocations);
+			finalLocation = processBlock(getMethodBody(methodInvocation, newRS), assignment.getLeftHandSide().toString(), newRS, finalLocation, prefix + "_" + 
+			(methodInvocation.getExpression()==null ? "" : methodInvocation.getExpression().toString()).replaceAll("\\.", "_") + "_" + methodInvocation.getName(), breakContinueLocations, SL);
 		}else{
-			Transition transition = new Transition(Transition.TAU, "true", rename(assignment, RS, prefix));
+			Transition transition = new Transition(Transition.TAU, "true", rename(assignment, RS, prefix) + getSecurityAssignments(SL, true));
 			finalLocation = newLocation();
 			sts.addVertex(initialLocation);
 			sts.addVertex(finalLocation);
@@ -218,16 +235,17 @@ public class STSExtractor {
 		return res;
 	}
 
-	private Integer processMethodInvocation(MethodInvocation methodInvocation, String XReturn,	Hashtable<String, String> RS, Integer initialLocation, String prefix, Hashtable<Integer, Integer> breakContinueLocations) {
+	private Integer processMethodInvocation(MethodInvocation methodInvocation, String XReturn,	Hashtable<String, String> RS, Integer initialLocation, String prefix, Hashtable<Integer, Integer> breakContinueLocations, Hashtable<String, String> SL) {
 		String declaringClass = methodInvocation.resolveMethodBinding().getDeclaringClass().getQualifiedName();
 		String methodFullName = declaringClass.replaceAll("\\.", "_") + "_" + methodInvocation.getName();
-		Transition transition = new Transition(methodFullName, "true", getPassByValueMethodArgumentsUpdater(methodInvocation, RS, prefix));
+		Transition transition = new Transition(methodFullName, "true", getPassByValueMethodArgumentsUpdater(methodInvocation, RS, prefix) + getSecurityAssignments(SL, true));
 		Integer finalLocation = newLocation();
 		sts.addVertex(initialLocation);
 		sts.addVertex(finalLocation);
 		sts.addEdge(initialLocation, finalLocation, transition);
 		Hashtable<String, String> newRS = getRenamingRules(methodInvocation, prefix);
-		finalLocation = processBlock(getMethodBody(methodInvocation, newRS), XReturn, newRS, finalLocation, prefix + "_" + methodInvocation.getExpression().toString().replaceAll("\\.", "_") + "_" + methodInvocation.getName(), breakContinueLocations);
+		finalLocation = processBlock(getMethodBody(methodInvocation, newRS), XReturn, newRS, finalLocation, prefix + "_" + 
+		(methodInvocation.getExpression()==null ? "" : methodInvocation.getExpression().toString()).replaceAll("\\.", "_") + "_" + methodInvocation.getName(), breakContinueLocations, SL);
 		return finalLocation;
 	}
 
@@ -241,7 +259,8 @@ public class STSExtractor {
 		for (int i=0; i< methodParameters.size(); i++) {
 			String methodParameter = methodParameters.get(i);
 			if(!newRS.containsKey(methodParameter)){
-				res += separator + prefix + "_" + methodInvocation.getExpression().toString().replaceAll("\\.", "_") + "_" + methodInvocation.getName() + methodParameter + "=" + rename((Expression) methodArguments.get(i), RS, prefix);
+					res += separator + prefix + "_" + (methodInvocation.getExpression()==null ? "" : methodInvocation.getExpression().toString()).replaceAll("\\.", "_") + "_" + 
+				methodInvocation.getName() + methodParameter + "=" + rename((Expression) methodArguments.get(i), RS, prefix);
 				separator = ", ";
 			}
 		}
@@ -296,7 +315,7 @@ public class STSExtractor {
 						&& iTypeBinding.getQualifiedName()!="java.lang.Double"
 						&& iTypeBinding.getQualifiedName()!="java.lang.BigDecimal"
 						&& iTypeBinding.getQualifiedName()!="java.lang.BigInteger"){
-					res.put(methodParameters.get(i), prefix + methodArguments.get(i).toString());
+					res.put(methodParameters.get(i), prefix + "_" + methodArguments.get(i).toString());
 				}
 			}
 		}
@@ -304,19 +323,19 @@ public class STSExtractor {
 	}
 
 	@SuppressWarnings("unchecked")
-	private Integer processBlock(Block block, String XReturn, Hashtable<String, String> RS, Integer initialLocation, String prefix, Hashtable<Integer, Integer> breakContinueLocations) {
+	private Integer processBlock(Block block, String XReturn, Hashtable<String, String> RS, Integer initialLocation, String prefix, Hashtable<Integer, Integer> breakContinueLocations, Hashtable<String, String> SL) {
 		List<Statement> statements = block.statements();
 		Integer finalLocation = initialLocation;
 		for (Statement statement : statements) {
-			finalLocation = processStatement(statement, XReturn, RS, finalLocation, prefix, breakContinueLocations);
+			finalLocation = processStatement(statement, XReturn, RS, finalLocation, prefix, breakContinueLocations, SL);
 		}
 		return finalLocation;
 	}
 
-	private Integer processWhileStatement(WhileStatement whileStatement, String XReturn, Hashtable<String, String> RS, Integer initialLocation, String prefix, Hashtable<Integer, Integer> breakContinueLocations) {
+	private Integer processWhileStatement(WhileStatement whileStatement, String XReturn, Hashtable<String, String> RS, Integer initialLocation, String prefix, Hashtable<Integer, Integer> breakContinueLocations, Hashtable<String, String> SL) {
 		String whileExpression = rename(whileStatement.getExpression(), RS, prefix);
-		Transition entranceTransition = new Transition(Transition.TAU, whileExpression, "");
-		Transition exitTransition = new Transition(Transition.TAU, "not (" + whileExpression + ")", "");
+		Transition entranceTransition = new Transition(Transition.TAU, whileExpression, getSecurityAssignments(SL, false));
+		Transition exitTransition = new Transition(Transition.TAU, "not (" + whileExpression + ")", getSecurityAssignments(SL, false));
 		Integer entranceLocation = newLocation();
 		Integer finalLocation = newLocation();
 		sts.addVertex(initialLocation);
@@ -324,13 +343,13 @@ public class STSExtractor {
 		sts.addVertex(entranceLocation);
 		sts.addEdge(initialLocation, entranceLocation, entranceTransition);
 		sts.addEdge(initialLocation, finalLocation, exitTransition);
-		Integer tempLocation = processStatement(whileStatement.getBody(), XReturn, RS, entranceLocation, prefix, breakContinueLocations);
-		Transition tempTransition =  new Transition(Transition.TAU, "true", "");
+		Integer tempLocation = processStatement(whileStatement.getBody(), XReturn, RS, entranceLocation, prefix, breakContinueLocations, SL);
+		Transition tempTransition =  new Transition(Transition.TAU, "true", getSecurityAssignments(SL, false));
 		sts.addVertex(tempLocation);
 		sts.addEdge(tempLocation, initialLocation, tempTransition);
 		for (Integer location : breakContinueLocations.keySet()) {
 			sts.addVertex(location);
-			Transition tempBCTransition =  new Transition(Transition.TAU, "true", "");
+			Transition tempBCTransition =  new Transition(Transition.TAU, "true", getSecurityAssignments(SL, false));
 			if(breakContinueLocations.get(location)==1){
 				sts.addEdge(location, finalLocation, tempBCTransition);
 			}else{
@@ -340,10 +359,10 @@ public class STSExtractor {
 		return finalLocation;
 	}
 
-	private Integer processIfStatement(IfStatement ifStatement, String XReturn, Hashtable<String, String> RS, Integer initialLocation, String prefix, Hashtable<Integer, Integer> breakContinueLocations) {
+	private Integer processIfStatement(IfStatement ifStatement, String XReturn, Hashtable<String, String> RS, Integer initialLocation, String prefix, Hashtable<Integer, Integer> breakContinueLocations, Hashtable<String, String> SL) {
 		String ifExpression = rename(ifStatement.getExpression(), RS, prefix);
-		Transition thenTransition = new Transition(Transition.TAU, ifExpression, "");
-		Transition elseTransition = new Transition(Transition.TAU, "not (" + ifExpression + ")", "");
+		Transition thenTransition = new Transition(Transition.TAU, ifExpression, getSecurityAssignments(SL, false));
+		Transition elseTransition = new Transition(Transition.TAU, "not (" + ifExpression + ")", getSecurityAssignments(SL, false));
 		Integer thenLocation = newLocation();
 		Integer elseLocation = newLocation();
 		sts.addVertex(initialLocation);
@@ -351,12 +370,12 @@ public class STSExtractor {
 		sts.addVertex(elseLocation);
 		sts.addEdge(initialLocation, thenLocation, thenTransition);
 		sts.addEdge(initialLocation, elseLocation, elseTransition);
-		Integer finalThenLocation = processStatement(ifStatement.getThenStatement(), XReturn, RS, thenLocation, prefix, breakContinueLocations);
+		Integer finalThenLocation = processStatement(ifStatement.getThenStatement(), XReturn, RS, thenLocation, prefix, breakContinueLocations, SL);
 		Integer finalLocation = finalThenLocation;
 		if(ifStatement.getElseStatement()!=null){
-			Integer finalElseLocation = processStatement(ifStatement.getElseStatement(), XReturn, RS, elseLocation, prefix, breakContinueLocations);
-			Transition transition1 = new Transition(Transition.TAU, "true", "");
-			Transition transition2 = new Transition(Transition.TAU, "true", "");
+			Integer finalElseLocation = processStatement(ifStatement.getElseStatement(), XReturn, RS, elseLocation, prefix, breakContinueLocations, SL);
+			Transition transition1 = new Transition(Transition.TAU, "true", getSecurityAssignments(SL, false));
+			Transition transition2 = new Transition(Transition.TAU, "true", getSecurityAssignments(SL, false));
 			finalLocation = newLocation();
 			sts.addVertex(finalLocation);
 			sts.addVertex(finalThenLocation);
@@ -364,10 +383,24 @@ public class STSExtractor {
 			sts.addEdge(finalThenLocation, finalLocation, transition1);
 			sts.addEdge(finalElseLocation, finalLocation, transition2);
 		}else{
-			Transition transition = new Transition(Transition.TAU, "true", "");
+			Transition transition = new Transition(Transition.TAU, "true", getSecurityAssignments(SL, false));
 			sts.addEdge(elseLocation, finalLocation, transition);
 		}
 		return finalLocation;
+	}
+	
+	private String getSecurityAssignments(Hashtable<String, String> SL, boolean withComa){
+		String res = "";
+		String separator = "";
+		for (String key : SL.keySet()) {
+			String[] parts = key.split(",");
+			res += separator + "L" + parts[1] + "_" + parts[0] + "=" + (SL.get(key).toLowerCase().equals("h") ? "true" : "false");
+			separator = ",";
+		}
+		if(!res.equals("") && withComa){
+			res = "," + res;
+		}
+		return res;
 	}
 	
 	static String renamed = "";
@@ -417,15 +450,6 @@ public class STSExtractor {
 		parser.setSource(Utils.readTextFile(javaFilePath));
 		parser.setUnitName(new File(javaFilePath).getName());
 		parser.setEnvironment(classPath, sourceDir, new String[] { "UTF-8"}, true);
-		CompilationUnit compilationUnit = (CompilationUnit) parser.createAST(null);
-		return compilationUnit;
-	}
-	
-	private CompilationUnit getCompilationUnit(ICompilationUnit iCompilationUnit) {
-		ASTParser parser = ASTParser.newParser(AST.JLS4);
-		parser.setKind(ASTParser.K_COMPILATION_UNIT);
-		parser.setSource(iCompilationUnit);
-		parser.setResolveBindings(true);
 		CompilationUnit compilationUnit = (CompilationUnit) parser.createAST(null);
 		return compilationUnit;
 	}

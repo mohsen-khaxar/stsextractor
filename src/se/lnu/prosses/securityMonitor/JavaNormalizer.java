@@ -12,6 +12,7 @@ import org.eclipse.jdt.core.dom.ASTParser;
 import org.eclipse.jdt.core.dom.ASTVisitor;
 import org.eclipse.jdt.core.dom.Assignment;
 import org.eclipse.jdt.core.dom.Block;
+import org.eclipse.jdt.core.dom.Comment;
 import org.eclipse.jdt.core.dom.CompilationUnit;
 import org.eclipse.jdt.core.dom.DoStatement;
 import org.eclipse.jdt.core.dom.EnhancedForStatement;
@@ -20,6 +21,7 @@ import org.eclipse.jdt.core.dom.ExpressionStatement;
 import org.eclipse.jdt.core.dom.ForStatement;
 import org.eclipse.jdt.core.dom.IfStatement;
 import org.eclipse.jdt.core.dom.InfixExpression;
+import org.eclipse.jdt.core.dom.LineComment;
 import org.eclipse.jdt.core.dom.MethodDeclaration;
 import org.eclipse.jdt.core.dom.MethodInvocation;
 import org.eclipse.jdt.core.dom.ParenthesizedExpression;
@@ -37,6 +39,27 @@ import org.eclipse.jface.text.Document;
 import org.eclipse.text.edits.TextEdit;
 import se.lnu.prosses.securityMonitor.Utils;
 
+class CommentVisitor extends ASTVisitor {
+	CompilationUnit cu;
+	String source;
+ 
+	public CommentVisitor(CompilationUnit cu, String source) {
+		super();
+		this.cu = cu;
+		this.source = source;
+	}
+ 
+	public boolean visit(LineComment node) {
+		int start = node.getStartPosition();
+		int end = start + node.getLength();
+		String comment = source.substring(start, end);
+		System.out.println(comment);
+		return true;
+	}
+ 
+ 
+}
+
 public class JavaNormalizer {
 	
 	static int i;
@@ -45,6 +68,9 @@ public class JavaNormalizer {
 		CompilationUnit compilationUnit = new JavaNormalizer().getCompilationUnit(new String[]{"C:\\Users\\khmo222\\workspace\\test\\src"}, 
 				new String[]{"C:\\Users\\khmo222\\workspace\\test\\src"}, "C:\\Users\\khmo222\\workspace\\test\\src\\com\\mohsen\\A.java");
 		i = 0;
+		for (Comment comment : (List<Comment>) compilationUnit.getCommentList()) {
+			comment.accept(new CommentVisitor(compilationUnit, "C:\\Users\\khmo222\\workspace\\test\\src\\com\\mohsen\\A.java"));
+		}
 		compilationUnit.accept(new ASTVisitor() {
 //			@Override
 //			public void preVisit(ASTNode node) {
@@ -52,8 +78,16 @@ public class JavaNormalizer {
 //					System.out.println(node);
 //				}
 //			}
-			public boolean visit(ExpressionStatement node) {
-				System.out.println(((Assignment)node.getExpression()).getRightHandSide().resolveTypeBinding().getQualifiedName());
+			@Override
+			public void preVisit(ASTNode node) {
+				System.out.println(node);
+				if(node.getNodeType()==ASTNode.LINE_COMMENT){
+					System.out.println(node);
+				}
+				super.preVisit(node);
+			}
+			public boolean visit(LineComment node) {
+				System.out.println(node);
 //				if(node.resolveBinding()!=null && node.resolveBinding() instanceof IVariableBinding){
 //					System.out.print(node + " : ");
 //					System.out.print(((IVariableBinding)node.resolveBinding()).isField());
@@ -132,7 +166,7 @@ public class JavaNormalizer {
 			String normalizedFragments = "";
 			for (VariableDeclarationFragment variableDeclarationFragment : fragments) {
 				Expression variableDeclarationFragmentInitializer = variableDeclarationFragment.getInitializer();
-				if(!isNormalized(variableDeclarationFragmentInitializer)){
+				if(variableDeclarationFragmentInitializer!=null && !isNormalized(variableDeclarationFragmentInitializer)){
 					String tempX = "__X" + variableCounter++;
 					normalizedFragments += normalize(ASTParser.K_STATEMENTS, getType(variableDeclarationFragmentInitializer.toString(), variableDeclarationFragmentInitializer) + " " + tempX + "=" + variableDeclarationFragmentInitializer.toString() + ";", variableDeclarationFragmentInitializer);
 					normalizedCode = normalizedCode.replace(variableDeclarationFragmentInitializer.toString(), tempX);
