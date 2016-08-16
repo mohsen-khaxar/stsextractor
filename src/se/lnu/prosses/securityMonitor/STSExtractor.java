@@ -2,10 +2,10 @@ package se.lnu.prosses.securityMonitor;
 
 import java.io.File;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.Hashtable;
 import java.util.List;
 import java.util.Map;
-
 import org.eclipse.jdt.core.JavaCore;
 import org.eclipse.jdt.core.dom.AST;
 import org.eclipse.jdt.core.dom.ASTNode;
@@ -31,6 +31,7 @@ import org.eclipse.jdt.core.dom.TypeDeclaration;
 import org.eclipse.jdt.core.dom.VariableDeclarationFragment;
 import org.eclipse.jdt.core.dom.VariableDeclarationStatement;
 import org.eclipse.jdt.core.dom.WhileStatement;
+import org.main.parser.automaton.Automaton;
 
 public class STSExtractor {
 
@@ -41,12 +42,16 @@ public class STSExtractor {
 	private STS sts;
 	private Hashtable<String, TypeDeclaration> classes = new Hashtable<>();
 	final static String DUMMY_METHOD = "se.lnu.SL.def";
-	
 	public STSExtractor(ArrayList<String> includingFilter, ArrayList<String> excludingFilter, ArrayList<String> entryPoints) {
 		this.includingFilter = includingFilter;
 		this.excludingFilter = excludingFilter;
 		this.entryPoints = entryPoints;
 		this.sts = new STS();
+		this.sts.variables = new HashSet<>();
+	}
+	
+	public Automaton convertToAutomaton(){
+		return sts.convertToAutomaton();
 	}
 	
 	void getClasses(String directoryPath, String[] classPath) throws Exception{
@@ -176,7 +181,7 @@ public class STSExtractor {
 			sts.addVertex(finalLocation);
 			sts.addEdge(initialLocation, finalLocation, transition);
 			Hashtable<String, String> newRS = getRenamingRules(methodInvocation, prefix);
-			finalLocation = processBlock(getMethodBody(methodInvocation, newRS), variableDeclarationFragment.getName().toString(), newRS, finalLocation, prefix + "_" + 
+			finalLocation = processBlock(getMethodBody(methodInvocation, newRS), rename(variableDeclarationFragment.getName(), newRS, prefix), newRS, finalLocation, prefix + "_" + 
 			(methodInvocation.getExpression()==null ? "" : methodInvocation.getExpression().toString()).replaceAll("\\.", "_") + "_" + methodInvocation.getName(), breakContinueLocations, SL);
 		}else if (variableDeclarationFragment.getInitializer()!=null){
 			Transition transition = new Transition(Transition.TAU, "true", rename(variableDeclarationFragment.getName(), RS, prefix) + "=" + rename(variableDeclarationFragment.getInitializer(), RS, prefix) + getSecurityAssignments(SL, true));
@@ -213,7 +218,7 @@ public class STSExtractor {
 			sts.addVertex(finalLocation);
 			sts.addEdge(initialLocation, finalLocation, transition);
 			Hashtable<String, String> newRS = getRenamingRules(methodInvocation, prefix);
-			finalLocation = processBlock(getMethodBody(methodInvocation, newRS), assignment.getLeftHandSide().toString(), newRS, finalLocation, prefix + "_" + 
+			finalLocation = processBlock(getMethodBody(methodInvocation, newRS), rename(assignment.getLeftHandSide(), newRS, prefix), newRS, finalLocation, prefix + "_" + 
 			(methodInvocation.getExpression()==null ? "" : methodInvocation.getExpression().toString()).replaceAll("\\.", "_") + "_" + methodInvocation.getName(), breakContinueLocations, SL);
 		}else{
 			Transition transition = new Transition(Transition.TAU, "true", rename(assignment, RS, prefix) + getSecurityAssignments(SL, true));
@@ -251,7 +256,7 @@ public class STSExtractor {
 
 	@SuppressWarnings("rawtypes")
 	private String getPassByValueMethodArgumentsUpdater(MethodInvocation methodInvocation, Hashtable<String, String> RS, String prefix) {
-		ArrayList<String> methodParameters = getMethodParameters(methodInvocation);
+		ArrayList<String> methodParameters = getMethodParameters(methodInvocation, prefix + "_" + (methodInvocation.getExpression()==null ? "" : methodInvocation.getExpression().toString()).replaceAll("\\.", "_") + "_" + methodInvocation.getName());
 		List methodArguments = methodInvocation.arguments();
 		Hashtable<String, String> newRS = getRenamingRules(methodInvocation, prefix);
 		String res = "";
@@ -259,8 +264,8 @@ public class STSExtractor {
 		for (int i=0; i< methodParameters.size(); i++) {
 			String methodParameter = methodParameters.get(i);
 			if(!newRS.containsKey(methodParameter)){
-					res += separator + prefix + "_" + (methodInvocation.getExpression()==null ? "" : methodInvocation.getExpression().toString()).replaceAll("\\.", "_") + "_" + 
-				methodInvocation.getName() + methodParameter + "=" + rename((Expression) methodArguments.get(i), RS, prefix);
+					String fullParameterName = prefix + "_" + (methodInvocation.getExpression()==null ? "" : methodInvocation.getExpression().toString()).replaceAll("\\.", "_") + "_" + methodInvocation.getName() + "_" + methodParameter;
+					res += separator + fullParameterName + "=" + rename((Expression) methodArguments.get(i), RS, prefix);
 				separator = ", ";
 			}
 		}
@@ -268,7 +273,7 @@ public class STSExtractor {
 	}
 
 	@SuppressWarnings("unchecked")
-	private ArrayList<String> getMethodParameters(MethodInvocation methodInvocation) {
+	private ArrayList<String> getMethodParameters(MethodInvocation methodInvocation, String prefix) {
 		String declaringClass = methodInvocation.resolveMethodBinding().getDeclaringClass().getQualifiedName();
 		TypeDeclaration cls = classes.get(declaringClass);
 		ArrayList<String> res = new ArrayList<>();
@@ -277,6 +282,7 @@ public class STSExtractor {
 				List<SingleVariableDeclaration> parameters = methodDeclaration.parameters();
 				for (SingleVariableDeclaration singleVariableDeclaration : parameters) {
 					res.add(singleVariableDeclaration.getName().getFullyQualifiedName());
+					addVariable(singleVariableDeclaration.getName(), prefix + "_" + singleVariableDeclaration.getName().toString());
 				}
 				break;
 			}
@@ -299,7 +305,7 @@ public class STSExtractor {
 
 	@SuppressWarnings("rawtypes")
 	private Hashtable<String, String> getRenamingRules(MethodInvocation methodInvocation, String prefix) {
-		ArrayList<String> methodParameters = getMethodParameters(methodInvocation);
+		ArrayList<String> methodParameters = getMethodParameters(methodInvocation, prefix + "_" + (methodInvocation.getExpression()==null ? "" : methodInvocation.getExpression().toString()).replaceAll("\\.", "_") + "_" + methodInvocation.getName());
 		List methodArguments = methodInvocation.arguments();
 		Hashtable<String, String> res = new Hashtable<>();
 		for (int i=0; i< methodArguments.size(); i++) {
@@ -307,14 +313,15 @@ public class STSExtractor {
 			if(methodArgument instanceof SimpleName){
 				ITypeBinding iTypeBinding = ((SimpleName) methodArgument).resolveTypeBinding();
 				if(!iTypeBinding.isPrimitive() 
-						&& iTypeBinding.getQualifiedName()!="java.lang.Integer"
-						&& iTypeBinding.getQualifiedName()!="java.lang.Long"
-						&& iTypeBinding.getQualifiedName()!="java.lang.Byte"
-						&& iTypeBinding.getQualifiedName()!="java.lang.Short"
-						&& iTypeBinding.getQualifiedName()!="java.lang.Float"
-						&& iTypeBinding.getQualifiedName()!="java.lang.Double"
-						&& iTypeBinding.getQualifiedName()!="java.lang.BigDecimal"
-						&& iTypeBinding.getQualifiedName()!="java.lang.BigInteger"){
+						&& !iTypeBinding.getQualifiedName().equals("java.lang.Integer")
+						&& !iTypeBinding.getQualifiedName().equals("java.lang.Long")
+						&& !iTypeBinding.getQualifiedName().equals("java.lang.Byte")
+						&& !iTypeBinding.getQualifiedName().equals("java.lang.Short")
+						&& !iTypeBinding.getQualifiedName().equals("java.lang.Float")
+						&& !iTypeBinding.getQualifiedName().equals("java.lang.Double")
+						&& !iTypeBinding.getQualifiedName().equals("java.lang.BigDecimal")
+						&& !iTypeBinding.getQualifiedName().equals("java.lang.BigInteger")
+						&& !iTypeBinding.getQualifiedName().equals("java.lang.Boolean")){
 					res.put(methodParameters.get(i), prefix + "_" + methodArguments.get(i).toString());
 				}
 			}
@@ -417,11 +424,39 @@ public class STSExtractor {
 					}else {
 						renamed = replace(renamed, simpleName.getIdentifier(), prefix + "_" + simpleName.getIdentifier());
 					}
+					addVariable(simpleName, renamed);
 				}
 				return false;
 			}
 		});
 		return renamed;
+	}
+	
+	public void addVariable(SimpleName simpleName, String renamed) {
+		IVariableBinding resolveBinding = (IVariableBinding)simpleName.resolveBinding();
+		ITypeBinding iTypeBinding = resolveBinding.getVariableDeclaration().getType();
+		if(iTypeBinding.getQualifiedName().equals("boolean")
+				|| iTypeBinding.getQualifiedName().equals("java.lang.Boolean")){
+			sts.variables.add(new String[]{"bool", renamed});
+		} else if(iTypeBinding.getQualifiedName().equals("int")
+				|| iTypeBinding.getQualifiedName().equals("long")
+				|| iTypeBinding.getQualifiedName().equals("byte")
+				|| iTypeBinding.getQualifiedName().equals("short")
+				|| iTypeBinding.getQualifiedName().equals("java.lang.Integer")
+				|| iTypeBinding.getQualifiedName().equals("java.lang.Long")
+				|| iTypeBinding.getQualifiedName().equals("java.lang.Byte")
+				|| iTypeBinding.getQualifiedName().equals("java.lang.Short")
+				|| iTypeBinding.getQualifiedName().equals("java.lang.BigInteger")){
+			sts.variables.add(new String[]{"int", renamed});
+		} else if(iTypeBinding.getQualifiedName().equals("float")
+				|| iTypeBinding.getQualifiedName().equals("double")
+				|| iTypeBinding.getQualifiedName().equals("java.lang.Float")
+				|| iTypeBinding.getQualifiedName().equals("java.lang.Double")
+				|| iTypeBinding.getQualifiedName().equals("java.lang.BigDecimal")){
+			sts.variables.add(new String[]{"real", renamed});
+		} else{
+			sts.variables.add(new String[]{"undef", renamed});
+		}
 	}
 	
 	private static String replace(String string, String find, String replace) {

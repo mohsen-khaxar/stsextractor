@@ -2,8 +2,10 @@ package se.lnu.prosses.securityMonitor;
 
 import java.io.File;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import org.eclipse.jdt.core.JavaCore;
 import org.eclipse.jdt.core.dom.AST;
@@ -12,7 +14,6 @@ import org.eclipse.jdt.core.dom.ASTParser;
 import org.eclipse.jdt.core.dom.ASTVisitor;
 import org.eclipse.jdt.core.dom.Assignment;
 import org.eclipse.jdt.core.dom.Block;
-import org.eclipse.jdt.core.dom.Comment;
 import org.eclipse.jdt.core.dom.CompilationUnit;
 import org.eclipse.jdt.core.dom.DoStatement;
 import org.eclipse.jdt.core.dom.EnhancedForStatement;
@@ -62,53 +63,14 @@ class CommentVisitor extends ASTVisitor {
 
 public class JavaNormalizer {
 	
-	static int i;
 	
 	public static void main(final String[] args) {
-		CompilationUnit compilationUnit = new JavaNormalizer().getCompilationUnit(new String[]{"C:\\Users\\khmo222\\workspace\\test\\src"}, 
-				new String[]{"C:\\Users\\khmo222\\workspace\\test\\src"}, "C:\\Users\\khmo222\\workspace\\test\\src\\com\\mohsen\\A.java");
-		i = 0;
-		for (Comment comment : (List<Comment>) compilationUnit.getCommentList()) {
-			comment.accept(new CommentVisitor(compilationUnit, "C:\\Users\\khmo222\\workspace\\test\\src\\com\\mohsen\\A.java"));
-		}
-		compilationUnit.accept(new ASTVisitor() {
-//			@Override
-//			public void preVisit(ASTNode node) {
-//				if(node.getNodeType()==node.SIMPLE_NAME) {
-//					System.out.println(node);
-//				}
-//			}
-			@Override
-			public void preVisit(ASTNode node) {
-				System.out.println(node);
-				if(node.getNodeType()==ASTNode.LINE_COMMENT){
-					System.out.println(node);
-				}
-				super.preVisit(node);
-			}
-			public boolean visit(LineComment node) {
-				System.out.println(node);
-//				if(node.resolveBinding()!=null && node.resolveBinding() instanceof IVariableBinding){
-//					System.out.print(node + " : ");
-//					System.out.print(((IVariableBinding)node.resolveBinding()).isField());
-//					System.out.println(((IVariableBinding)node.resolveBinding()).isParameter());
-//					i++;
-//				}
-//				System.out.println(node);
-//				List arguments = node.arguments();
-//				for (Object obj : arguments) {
-//					if(obj instanceof SimpleName){
-//						SimpleName simpleName = (SimpleName) obj;
-//						System.out.println(simpleName.resolveTypeBinding().isClass());
-//					}
-//					System.out.println(((Expression)obj).resolveTypeBinding().isPrimitive());
-//				}
-//				if(node.resolveTypeBinding()!=null && node.resolveBinding().getKind()==3)
-//					System.out.println(node + " : " + node.resolveTypeBinding());
-				return false;
-			}
-		});
-		System.out.println(i);
+		Set<String> test = new HashSet<>();
+		test.add("ali");
+		test.add("ali");
+		test.add("ali1");
+		System.out.println(test);
+		
 	}
 	
 	
