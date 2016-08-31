@@ -13,6 +13,7 @@ public class Main {
 		ArrayList<String> entryPoints = new ArrayList<>();
 		entryPoints.add(".*\\.doGet");
 		entryPoints.add(".*\\.doPost");
+//		entryPoints.add(".*\\.f");
 		ArrayList<String> excludingFilter = new ArrayList<>();
 		STSExtractor stsExtractor = new STSExtractor(includingFilter, excludingFilter , entryPoints);
 		stsExtractor.extract(directoryPath, classPath);

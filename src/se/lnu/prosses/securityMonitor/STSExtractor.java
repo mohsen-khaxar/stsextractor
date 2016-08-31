@@ -2,7 +2,6 @@ package se.lnu.prosses.securityMonitor;
 
 import java.io.File;
 import java.util.ArrayList;
-import java.util.HashSet;
 import java.util.Hashtable;
 import java.util.List;
 import java.util.Map;
@@ -34,10 +33,7 @@ import org.eclipse.jdt.core.dom.WhileStatement;
 import org.main.parser.automaton.Automaton;
 
 public class STSExtractor {
-
-	
-	
-	int newLocation = 0;
+	int newLocation = 1;
 	public ArrayList<String> includingFilter;
 	public ArrayList<String> excludingFilter;
 	public ArrayList<String> entryPoints;
@@ -49,7 +45,6 @@ public class STSExtractor {
 		this.excludingFilter = excludingFilter;
 		this.entryPoints = entryPoints;
 		this.sts = new STS();
-		this.sts.variables = new HashSet<>();
 	}
 	
 	public Automaton convertToAutomaton(){
@@ -76,6 +71,7 @@ public class STSExtractor {
 		}
 		System.out.println("DONE.");
 		sts.saveAsDot(directoryPath + File.separator + "model.dot");
+		sts.convertToUncontrollableFreeSTS().saveAsDot(directoryPath + File.separator + "freemodel.dot");
 	}
 	
 	private void extractForAClass(TypeDeclaration cls) throws Exception {
@@ -90,8 +86,12 @@ public class STSExtractor {
 			}
 			String methodModifier = methodDeclaration.modifiers().toString().toLowerCase();
 			if (matched && methodDeclaration.getBody() != null	&& (methodModifier.contains("public") || methodModifier.contains("protected"))) {
+				Transition transition =  new Transition(Transition.START, "true", "");
+				sts.addVertex(0);
+				sts.addVertex(1);
+				sts.addEdge(0, 1, transition);
 				Integer finalLocation = processMethod(methodDeclaration);
-				Transition transition =  new Transition(Transition.TAU, "true", "");
+				transition =  new Transition(Transition.TAU, "true", "");
 				sts.addEdge(finalLocation, 0, transition);
 			}
 		}
@@ -100,7 +100,7 @@ public class STSExtractor {
 	@SuppressWarnings("unchecked")
 	private Integer processMethod(MethodDeclaration methodDeclaration) {
 		List<Statement> statements = methodDeclaration.getBody().statements();
-		Integer location = 0;
+		Integer location = 1;
  		String prefix = methodDeclaration.resolveBinding().getDeclaringClass().getQualifiedName().replaceAll("\\.", "_") + "_" + methodDeclaration.getName();
 		Hashtable<String, String> SL = new Hashtable<String, String>();
 		for (Statement statement : statements) {
@@ -424,9 +424,11 @@ public class STSExtractor {
 					if(resolveBinding.isParameter() && RS.contains(simpleName.getIdentifier())){
 						renamed = replace(renamed, simpleName.getIdentifier(), RS.get(simpleName.getIdentifier()));
 						addVariable(simpleName, RS.get(simpleName.getIdentifier()));
-					}else {
+					}else if(simpleName.getParent().getNodeType()!=ASTNode.QUALIFIED_NAME || simpleName.getParent().toString().startsWith(simpleName.toString())) {
 						renamed = replace(renamed, simpleName.getIdentifier(), prefix + "_" + simpleName.getIdentifier());
 						addVariable(simpleName, prefix + "_" + simpleName.getIdentifier());
+					}else{
+						renamed = replace(renamed, "." + simpleName.getIdentifier(), "_" + simpleName.getIdentifier());
 					}
 				}
 				return false;
@@ -464,16 +466,20 @@ public class STSExtractor {
 	
 	private static String replace(String string, String find, String replace) {
 		String[] res = string.split(find);
-		string = "";
-		for (int i=0; i<res.length-1; i++) {
-			if((!Character.isLetter(res[i].charAt(res[i].length()-1)) && res[i].charAt(res[i].length()-1)!='_' && res[i+1].charAt(0)!='(')  
-					|| (!Character.isLetter(res[i+1].charAt(0))&&res[i+1].charAt(0)!='_'&&res[i+1].charAt(0)!='(')){
-				string += res[i] + replace;
-			}else{
-				string += res[i] + find;
+		try{
+			string = "";
+			for (int i=0; i<res.length-1; i++) {
+				if((!Character.isLetter(res[i].charAt(res[i].length()-1)) && res[i].charAt(res[i].length()-1)!='_' && res[i+1].charAt(0)!='(')  
+						|| (!Character.isLetter(res[i+1].charAt(0))&&res[i+1].charAt(0)!='_'&&res[i+1].charAt(0)!='(')){
+					string += res[i] + replace;
+				}else{
+					string += res[i] + find;
+				}
 			}
+			string += res[res.length-1];
+		}catch(Exception e){
+			System.out.println(string);
 		}
-		string += res[res.length-1];
 		return string;
 	}
 
