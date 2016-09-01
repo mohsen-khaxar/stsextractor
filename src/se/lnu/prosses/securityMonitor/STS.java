@@ -7,10 +7,12 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
+import org.jgrapht.DirectedGraph;
+import org.jgrapht.EdgeFactory;
 import org.jgrapht.ext.DOTExporter;
 import org.jgrapht.ext.EdgeNameProvider;
 import org.jgrapht.ext.VertexNameProvider;
-import org.jgrapht.graph.DefaultDirectedGraph;
+import org.jgrapht.graph.AbstractBaseGraph;
 import org.main.parser.automaton.Automaton;
 import org.main.parser.automaton.Edge;
 import org.main.parser.automaton.Event;
@@ -20,65 +22,52 @@ import org.main.parser.automaton.Variable;
 import org.main.parser.automaton.Variable.VariableType;
 
 @SuppressWarnings("serial")
-public class STS extends DefaultDirectedGraph<Integer, Transition>{
+public class STS extends AbstractBaseGraph<Integer, Transition> implements DirectedGraph<Integer, Transition>{
 	public Set<String[]> variables;
 	public Set<String> controllableEvents;
 	
+	static EdgeFactory<Integer, Transition> ef = new EdgeFactory<Integer, Transition>() {
+		@Override
+		public Transition createEdge(Integer sourceVertex, Integer targetVertex) {
+			return new Transition();
+		}
+	};
+	
 	public STS(Class<? extends Transition> edgeClass) {
-		super(edgeClass);
+		super(ef, true, true);
 	}
 	public STS() {
-		super(Transition.class);
+		super(ef, true, true);
 		this.variables = new HashSet<>();
 		this.controllableEvents = new HashSet<>(); 
 		this.controllableEvents.add(Transition.START);
-//		this.controllableEvents.add("se_lnu_Users_removeUser");
-//		this.controllableEvents.add("se_lnu_User_getFriendAt");
-//		this.controllableEvents.add("se_lnu_EstimateLocation_getDistance");
-//		this.controllableEvents.add("se_lnu_EstimateLocation_estimatLocation");
-//		this.controllableEvents.add("se_lnu_Users_findUserById");
-//		this.controllableEvents.add("se_lnu_Users_addUser");
-//		this.controllableEvents.add("se_lnu_Users_addFriend");
-//		this.controllableEvents.add("se_lnu_Users_auth");
-		this.controllableEvents.add("se_lnu_Test_g");
+		this.controllableEvents.add("se_lnu_Users_removeUser");
+		this.controllableEvents.add("se_lnu_User_getFriendAt");
+		this.controllableEvents.add("se_lnu_EstimateLocation_getDistance");
+		this.controllableEvents.add("se_lnu_EstimateLocation_estimatLocation");
+		this.controllableEvents.add("se_lnu_Users_findUserById");
+		this.controllableEvents.add("se_lnu_Users_addUser");
+		this.controllableEvents.add("se_lnu_Users_addFriend");
+		this.controllableEvents.add("se_lnu_Users_auth");
+//		this.controllableEvents.add("se_lnu_Test_g");
 	}
 	
 	public STS convertToUncontrollableFreeSTS(){
 		STS sts = (STS) this.clone();
-		Transition transition = nextUnprocessed(sts);
+		Transition transition = nextUncontrollable(sts);
 		while(transition!=null){
 			Set<Transition> incomingTransitions = new HashSet<>();
 			incomingTransitions.addAll(sts.incomingEdgesOf(sts.getEdgeSource(transition)));
-			try{
-				for (Transition incomingTransition : incomingTransitions) {
-					if(!controllableEvents.contains(incomingTransition.getEvent())){
-						mergeTransitions(sts, transition, incomingTransition);
-					}
-				}
-			}catch(Exception e){
-				System.out.println();
-			}
-			sts.removeEdge(transition);
-			eliminateBlockingLocation(sts);
-			transition = nextUnprocessed(sts);
-//			try {
-//			sts.saveAsDot("p:\\model.dot");
-//		} catch (Exception e) {
-//			// TODO Auto-generated catch block
-//			e.printStackTrace();
-//		}
-		}
-		transition = nextUncontrollable(sts);
-		while(transition!=null){
-			Set<Transition> incomingTransitions = sts.incomingEdgesOf(sts.getEdgeSource(transition));
 			for (Transition incomingTransition : incomingTransitions) {
-				mergeTransitions(sts, transition, incomingTransition);
+				mergeTransitions(sts, incomingTransition, transition);
 			}
 			sts.removeEdge(transition);
+			if(sts.outgoingEdgesOf(sts.getEdgeSource(transition)).size()==0){
+				sts.removeVertex(sts.getEdgeSource(transition));
+			}
 			transition = nextUncontrollable(sts);
 		}
 		clearUpdaters(sts);
-		eliminateBlockingLocation(sts);
 		return sts;
 	}
 	
@@ -87,37 +76,14 @@ public class STS extends DefaultDirectedGraph<Integer, Transition>{
 			t.setUpadater("");
 		}
 	}
-	
-	private void eliminateBlockingLocation(STS sts) {
-		Set<Integer> locations = new HashSet<>();
-		locations.addAll(sts.vertexSet());
-		for (Integer location : locations) {
-			if(sts.outgoingEdgesOf(location).size()==0){
-				sts.removeVertex(location);
-			}
-		}
-	}
-	
-	private void mergeTransitions(STS sts, Transition transition, Transition incomingTransition) {
-		String guard = incomingTransition.getGuard() + " and " + getWeakestPrecondition(transition.getGuard(), incomingTransition.getUpadater());
-		guard = guard.replaceAll("\\s*true\\s*and\\s*", "").replaceAll("\\s*and\\s*true\\s*", "");
-		String updater = incomingTransition.getUpadater() + (transition.getUpadater().equals("") ? "" : "," + transition.getUpadater());
-		Transition newTransition = new Transition(incomingTransition.getEvent(), guard, updater);
-		if(sts.getEdge(sts.getEdgeSource(incomingTransition), sts.getEdgeTarget(transition))==null){
-			sts.addEdge(sts.getEdgeSource(incomingTransition), sts.getEdgeTarget(transition), newTransition);
-		}else{
-			Integer newLocation = 0;
-			for (Integer location : sts.vertexSet()) {
-				if(location>newLocation){
-					newLocation = location;
-				}
-			}
-			newLocation++;
-			sts.addVertex(newLocation);
-			sts.addEdge(sts.getEdgeSource(incomingTransition), newLocation, newTransition);
-			for (Transition t : sts.outgoingEdgesOf(sts.getEdgeTarget(transition))) {
-				sts.addEdge(newLocation, sts.getEdgeTarget(t), (Transition) t.clone());
-			}
+
+	private void mergeTransitions(STS sts, Transition incomingTransition, Transition outgoingTransition) {
+		if(controllableEvents.contains(incomingTransition.getEvent()) || sts.getEdgeSource(incomingTransition)!=sts.getEdgeTarget(outgoingTransition)){
+			String guard = incomingTransition.getGuard() + " and " + getWeakestPrecondition(outgoingTransition.getGuard(), incomingTransition.getUpadater());
+			guard = guard.replaceAll("\\s*true\\s*and\\s*", "").replaceAll("\\s*and\\s*true\\s*", "");
+			String updater = incomingTransition.getUpadater() + "," + outgoingTransition.getUpadater();
+			Transition newTransition = new Transition(incomingTransition.getEvent(), guard, updater);
+			sts.addEdge(sts.getEdgeSource(incomingTransition), sts.getEdgeTarget(outgoingTransition), newTransition);
 		}
 	}
 	
@@ -156,7 +122,7 @@ public class STS extends DefaultDirectedGraph<Integer, Transition>{
 					&& !Character.isJavaIdentifierPart(guardParts[i+1].charAt(0))){
 				guard += replace;
 			}else{
-				guard += assignmentParts[0];
+				guard += assignmentParts[0].replaceAll(" ", "");
 			}
 		}
 		guard += guardParts[guardParts.length-1];
@@ -164,25 +130,6 @@ public class STS extends DefaultDirectedGraph<Integer, Transition>{
 		return guard;
 	}
 	
-	private Transition nextUnprocessed(STS sts) {
-		Transition res = null;
-		for (Transition transition : sts.edgeSet()) {
-			if(sts.getEdgeSource(transition)!=0 && !controllableEvents.contains(transition.getEvent()) /*&& !transition.getGuard().toLowerCase().equals("true")*/){
-				boolean check = false;
-				for (Transition incomingTransition : sts.incomingEdgesOf(sts.getEdgeSource(transition))) {
-					if(!controllableEvents.contains(incomingTransition.getEvent())){
-						check = true;
-						break;
-					}
-				}
-				if(check){
-					res = transition;
-					break;
-				}
-			}
-		}
-		return res;
-	}
 	public void saveAsDot(String path) throws Exception{
 		DOTExporter<Integer, Transition> dotExporter = new DOTExporter<Integer, Transition>(new STSVertexNameProvider<Integer>(), null, new STSEdgeNameProvider<Transition>());
         Writer writer = new FileWriter(path);

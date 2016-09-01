@@ -10,6 +10,10 @@ public class Transition extends DefaultEdge {
 	static final public String TAU = "TAU";
 	public static final String START = "START";
 	
+	public Transition(){
+		
+	}
+	
 	public Transition(String event,	String guard, String upadater){
 		this.event = event;
 		this.guard = guard;

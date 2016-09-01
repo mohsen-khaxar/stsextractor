@@ -45,6 +45,10 @@ public class STSExtractor {
 		this.excludingFilter = excludingFilter;
 		this.entryPoints = entryPoints;
 		this.sts = new STS();
+		Transition transition =  new Transition(Transition.START, "true", "");
+		sts.addVertex(0);
+		sts.addVertex(1);
+		sts.addEdge(0, 1, transition);
 	}
 	
 	public Automaton convertToAutomaton(){
@@ -86,12 +90,8 @@ public class STSExtractor {
 			}
 			String methodModifier = methodDeclaration.modifiers().toString().toLowerCase();
 			if (matched && methodDeclaration.getBody() != null	&& (methodModifier.contains("public") || methodModifier.contains("protected"))) {
-				Transition transition =  new Transition(Transition.START, "true", "");
-				sts.addVertex(0);
-				sts.addVertex(1);
-				sts.addEdge(0, 1, transition);
 				Integer finalLocation = processMethod(methodDeclaration);
-				transition =  new Transition(Transition.TAU, "true", "");
+				Transition transition = new Transition(Transition.TAU, "true", "");
 				sts.addEdge(finalLocation, 0, transition);
 			}
 		}
