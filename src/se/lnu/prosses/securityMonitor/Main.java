@@ -1,6 +1,8 @@
 package se.lnu.prosses.securityMonitor;
 
 import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.Set;
 
 public class Main {
 	public static void main(String[] args) throws Exception {
@@ -16,6 +18,16 @@ public class Main {
 //		entryPoints.add(".*\\.f");
 		ArrayList<String> excludingFilter = new ArrayList<>();
 		STSExtractor stsExtractor = new STSExtractor(includingFilter, excludingFilter , entryPoints);
-		stsExtractor.extract(directoryPath, classPath);
+		 Set<String> controllableMethodNames = new HashSet<>();
+		controllableMethodNames .add("se.lnu.Users.removeUser");
+		controllableMethodNames.add("se.lnu.User.getFriendAt");
+		controllableMethodNames.add("se.lnu.EstimateLocation.getDistance");
+		controllableMethodNames.add("se.lnu.EstimateLocation.estimatLocation");
+		controllableMethodNames.add("se.lnu.Users.findUserById");
+		controllableMethodNames.add("se.lnu.Users.addUser");
+		controllableMethodNames.add("se.lnu.Users.addFriend");
+		controllableMethodNames.add("se.lnu.Users.auth");
+		controllableMethodNames.add("se.lnu.Test.g");
+		stsExtractor.extract(directoryPath, classPath, controllableMethodNames);
 	}
 }

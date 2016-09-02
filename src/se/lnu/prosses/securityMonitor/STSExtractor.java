@@ -5,6 +5,8 @@ import java.util.ArrayList;
 import java.util.Hashtable;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+
 import org.eclipse.jdt.core.JavaCore;
 import org.eclipse.jdt.core.dom.AST;
 import org.eclipse.jdt.core.dom.ASTNode;
@@ -68,14 +70,17 @@ public class STSExtractor {
 		}
 	}
 	
-	public void extract(String directoryPath, String[] classPath) throws Exception{
+	public void extract(String directoryPath, String[] classPath, Set<String> controllableMethodNames) throws Exception{
+		sts.controllableMethodNames = controllableMethodNames;
 		getClasses(directoryPath, classPath);
 		for (TypeDeclaration cls : classes.values()) {
 			extractForAClass(cls);
 		}
 		System.out.println("DONE.");
 		sts.saveAsDot(directoryPath + File.separator + "model.dot");
-		sts.convertToUncontrollableFreeSTS().saveAsDot(directoryPath + File.separator + "freemodel.dot");
+		STS uncontrollableFreeSTS = sts.convertToUncontrollableFreeSTS();
+		uncontrollableFreeSTS.saveAsDot(directoryPath + File.separator + "freemodel.dot");
+		uncontrollableFreeSTS.generateAspect(directoryPath, "P:\\aspects");
 	}
 	
 	private void extractForAClass(TypeDeclaration cls) throws Exception {
@@ -344,7 +349,7 @@ public class STSExtractor {
 	private Integer processWhileStatement(WhileStatement whileStatement, String XReturn, Hashtable<String, String> RS, Integer initialLocation, String prefix, Hashtable<Integer, Integer> breakContinueLocations, Hashtable<String, String> SL) {
 		String whileExpression = rename(whileStatement.getExpression(), RS, prefix);
 		Transition entranceTransition = new Transition(Transition.TAU, whileExpression, getSecurityAssignments(SL, false));
-		Transition exitTransition = new Transition(Transition.TAU, "not (" + whileExpression + ")", getSecurityAssignments(SL, false));
+		Transition exitTransition = new Transition(Transition.TAU, "  not (" + whileExpression + ")", getSecurityAssignments(SL, false));
 		Integer entranceLocation = newLocation();
 		Integer finalLocation = newLocation();
 		sts.addVertex(initialLocation);
@@ -371,7 +376,7 @@ public class STSExtractor {
 	private Integer processIfStatement(IfStatement ifStatement, String XReturn, Hashtable<String, String> RS, Integer initialLocation, String prefix, Hashtable<Integer, Integer> breakContinueLocations, Hashtable<String, String> SL) {
 		String ifExpression = rename(ifStatement.getExpression(), RS, prefix);
 		Transition thenTransition = new Transition(Transition.TAU, ifExpression, getSecurityAssignments(SL, false));
-		Transition elseTransition = new Transition(Transition.TAU, "not (" + ifExpression + ")", getSecurityAssignments(SL, false));
+		Transition elseTransition = new Transition(Transition.TAU, "  not (" + ifExpression + ")", getSecurityAssignments(SL, false));
 		Integer thenLocation = newLocation();
 		Integer elseLocation = newLocation();
 		sts.addVertex(initialLocation);
@@ -483,7 +488,7 @@ public class STSExtractor {
 		return string;
 	}
 
-	private CompilationUnit getCompilationUnit(String[] sourceDir, String[] classPath, String javaFilePath) {
+	static CompilationUnit getCompilationUnit(String[] sourceDir, String[] classPath, String javaFilePath) {
 		ASTParser parser = ASTParser.newParser(AST.JLS4);
 		parser.setResolveBindings(true);
 		parser.setKind(ASTParser.K_COMPILATION_UNIT);
@@ -519,7 +524,7 @@ public class STSExtractor {
 		return res;
 	}
 
-	private static ArrayList<String> getAllJavaFilePaths(String directoryPath) {
+	static ArrayList<String> getAllJavaFilePaths(String directoryPath) {
 		ArrayList<String> allJavaFilePaths = new ArrayList<String>();
 		getAllJavaFilePaths(directoryPath, allJavaFilePaths);
 		return allJavaFilePaths;
