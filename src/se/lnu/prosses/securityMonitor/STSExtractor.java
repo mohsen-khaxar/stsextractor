@@ -30,7 +30,7 @@ import org.eclipse.jdt.core.dom.TypeDeclaration;
 import org.eclipse.jdt.core.dom.VariableDeclarationFragment;
 import org.eclipse.jdt.core.dom.VariableDeclarationStatement;
 import org.eclipse.jdt.core.dom.WhileStatement;
-import org.main.parser.automaton.Automaton;
+import org.project.automaton.Automaton;
 
 public class STSExtractor {
 	int newLocation = 1;

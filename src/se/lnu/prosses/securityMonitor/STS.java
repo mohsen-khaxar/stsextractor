@@ -13,13 +13,14 @@ import org.jgrapht.ext.DOTExporter;
 import org.jgrapht.ext.EdgeNameProvider;
 import org.jgrapht.ext.VertexNameProvider;
 import org.jgrapht.graph.AbstractBaseGraph;
-import org.main.parser.automaton.Automaton;
-import org.main.parser.automaton.Edge;
-import org.main.parser.automaton.Event;
-import org.main.parser.automaton.Event.EventType;
-import org.main.parser.automaton.State;
-import org.main.parser.automaton.Variable;
-import org.main.parser.automaton.Variable.VariableType;
+import org.project.automaton.Automaton;
+import org.project.automaton.Edge;
+import org.project.automaton.Event;
+import org.project.automaton.Event.EventType;
+import org.project.automaton.Expression;
+import org.project.automaton.State;
+import org.project.automaton.Variable;
+import org.project.automaton.Variable.VariableType;
 
 @SuppressWarnings("serial")
 public class STS extends AbstractBaseGraph<Integer, Transition> implements DirectedGraph<Integer, Transition>{
@@ -146,7 +147,24 @@ public class STS extends AbstractBaseGraph<Integer, Transition> implements Direc
 			List<Edge> edges = new ArrayList<>();
 			Set<Transition> outgoingEdges = this.outgoingEdgesOf(vertex);
 			for (Transition transition : outgoingEdges) {
-				edges.add(new Edge(String.valueOf(this.getEdgeTarget(transition)), transition.getGuard(), transition.getEvent(), transition.getUpadater()));
+				List<Expression> updater = new ArrayList<>();
+				if(!transition.getUpadater().replaceAll(" ", "").equals("")){
+					String[] parts = transition.getUpadater().split(",");
+					for (String part : parts) {
+						String[] assignmentParts = part.split("=");
+						String righthand = "";
+						String separator = "";
+						for (int i=1; i<assignmentParts.length; i++) {
+							righthand += separator + assignmentParts[i];
+							separator = "=";
+						}
+						Expression expression = new Expression();
+						expression.setVariable(assignmentParts[0].replaceAll(" ", ""));
+						expression.setValue(righthand);
+						updater.add(expression);
+					}
+				}
+				edges.add(new Edge(String.valueOf(this.getEdgeTarget(transition)), transition.getGuard(), transition.getEvent(), updater));
 				eventNames.add(transition.getEvent());
 			}
 			State state = new State(String.valueOf(vertex), edges);
