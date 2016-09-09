@@ -70,12 +70,21 @@ public class STSExtractor {
 		}
 	}
 	
+	void removeTemporaryFiles(String directoryPath){
+		ArrayList<String> javaFilePaths = getAllJavaFilePaths(directoryPath);
+		for (String javaFilePath : javaFilePaths) {
+			new File(javaFilePath).delete();
+			new File(javaFilePath + "_").renameTo(new File(javaFilePath));
+		}
+	}
+	
 	public void extract(String directoryPath, String[] classPath, Set<String> controllableMethodNames) throws Exception{
 		sts.controllableMethodNames = controllableMethodNames;
 		getClasses(directoryPath, classPath);
 		for (TypeDeclaration cls : classes.values()) {
 			extractForAClass(cls);
 		}
+		removeTemporaryFiles(directoryPath);
 		System.out.println("DONE.");
 		sts.saveAsDot(directoryPath + File.separator + "model.dot");
 		STS uncontrollableFreeSTS = sts.convertToUncontrollableFreeSTS();
