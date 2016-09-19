@@ -6,13 +6,14 @@ import java.util.Set;
 
 public class Main {
 	public static void main(String[] args) throws Exception {
-		String directoryPath = "C:\\Users\\khmo222\\workspace\\RunningExample\\src";
+		String directoryPath = "C:\\Users\\khmo222\\git\\runningexample\\src";
 		String[] classPath = new String[]{"C:\\tools\\apache-tomcat-6.0.4\\lib\\servlet-api.jar", "C:\\Users\\khmo222\\git\\stsextractor\\src"};
 		ArrayList<String> includingFilter = new ArrayList<String>();
 		includingFilter.add("se\\.lnu.*");
 //		includingFilter.add("java\\.sql.*");
 //		includingFilter.add("javax\\.servlet.*");
 		ArrayList<String> entryPoints = new ArrayList<>();
+//		entryPoints.add(".*\\.mohsen");
 		entryPoints.add(".*\\.doGet");
 		entryPoints.add(".*\\.doPost");
 //		entryPoints.add(".*\\.f");

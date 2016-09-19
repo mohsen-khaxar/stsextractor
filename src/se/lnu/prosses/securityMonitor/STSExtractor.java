@@ -1,6 +1,7 @@
 package se.lnu.prosses.securityMonitor;
 
 import java.io.File;
+import java.io.FileWriter;
 import java.util.ArrayList;
 import java.util.Hashtable;
 import java.util.List;
@@ -33,6 +34,7 @@ import org.eclipse.jdt.core.dom.VariableDeclarationFragment;
 import org.eclipse.jdt.core.dom.VariableDeclarationStatement;
 import org.eclipse.jdt.core.dom.WhileStatement;
 import org.project.automaton.Automaton;
+import org.project.automaton.Variable;
 
 public class STSExtractor {
 	int newLocation = 1;
@@ -87,9 +89,16 @@ public class STSExtractor {
 		removeTemporaryFiles(directoryPath);
 		System.out.println("DONE.");
 		sts.saveAsDot(directoryPath + File.separator + "model.dot");
+		Automaton automaton = sts.convertToAutomaton();
+		FileWriter fileWriter = new FileWriter(directoryPath + File.separator + "vars.txt");
+		List<Variable> vars = automaton.getVariables();
+		for (Variable variable : vars) {
+			fileWriter.write(variable.getName() + "\n");
+		}
+		fileWriter.close();
 		STS uncontrollableFreeSTS = sts.convertToUncontrollableFreeSTS();
 		uncontrollableFreeSTS.saveAsDot(directoryPath + File.separator + "freemodel.dot");
-		uncontrollableFreeSTS.generateAspect(directoryPath, "P:\\aspects");
+//		uncontrollableFreeSTS.generateAspect(directoryPath, "P:\\aspects");
 	}
 	
 	private void extractForAClass(TypeDeclaration cls) throws Exception {
@@ -427,6 +436,7 @@ public class STSExtractor {
 	}
 	
 	static String renamed = "";
+	static String temp = "";
 	private String rename(Expression expression, final Hashtable<String, String> RS, final String prefix){
 		renamed = " " + expression.toString() + " ";
 		renamed = renamed.replaceAll("\\s+\\(", "(");
@@ -438,11 +448,18 @@ public class STSExtractor {
 					if(resolveBinding.isParameter() && RS.contains(simpleName.getIdentifier())){
 						renamed = replace(renamed, simpleName.getIdentifier(), RS.get(simpleName.getIdentifier()));
 						addVariable(simpleName, RS.get(simpleName.getIdentifier()));
-					}else if(simpleName.getParent().getNodeType()!=ASTNode.QUALIFIED_NAME || simpleName.getParent().toString().startsWith(simpleName.toString())) {
+					}else if(simpleName.getParent().getNodeType()!=ASTNode.QUALIFIED_NAME) {
 						renamed = replace(renamed, simpleName.getIdentifier(), prefix + "_" + simpleName.getIdentifier());
 						addVariable(simpleName, prefix + "_" + simpleName.getIdentifier());
-					}else{
+					}else if(simpleName.getParent().toString().startsWith(simpleName.toString())){
+						renamed = replace(renamed, simpleName.getIdentifier(), prefix + "_" + simpleName.getIdentifier());
+						temp = prefix + "_" + simpleName.getIdentifier();
+					}else if(simpleName.getParent().toString().endsWith(simpleName.toString())){
 						renamed = replace(renamed, "." + simpleName.getIdentifier(), "_" + simpleName.getIdentifier());
+						addVariable(simpleName, temp + "_" + simpleName.getIdentifier());
+					} else{
+						renamed = replace(renamed, "." + simpleName.getIdentifier(), "_" + simpleName.getIdentifier());
+						temp += "_" + simpleName.getIdentifier();
 					}
 				}
 				return false;
