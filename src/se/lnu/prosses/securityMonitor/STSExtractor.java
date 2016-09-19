@@ -440,6 +440,9 @@ public class STSExtractor {
 	private String rename(Expression expression, final Hashtable<String, String> RS, final String prefix){
 		renamed = " " + expression.toString() + " ";
 		renamed = renamed.replaceAll("\\s+\\(", "(");
+		if(expression.toString().replaceAll(" ", "").contains("ReadPermission")){
+			System.out.println(expression);
+		}
 		expression.accept(new ASTVisitor() {
 			@Override
 			public boolean visit(SimpleName simpleName) {
@@ -500,8 +503,9 @@ public class STSExtractor {
 		try{
 			string = "";
 			for (int i=0; i<res.length-1; i++) {
-				if((!Character.isLetter(res[i].charAt(res[i].length()-1)) && res[i].charAt(res[i].length()-1)!='_' && res[i+1].charAt(0)!='(')  
-						|| (!Character.isLetter(res[i+1].charAt(0))&&res[i+1].charAt(0)!='_'&&res[i+1].charAt(0)!='(')){
+				if(find.charAt(0)=='.'||(!Character.isLetter(res[i].charAt(res[i].length()-1))) && !Character.isLetter(res[i+1].charAt(0))
+						&& res[i].charAt(res[i].length()-1)!='_' && res[i+1].charAt(0)!='_' 
+						&& res[i+1].charAt(0)!='('){
 					string += res[i] + replace;
 				}else{
 					string += res[i] + find;
