@@ -133,6 +133,9 @@ public class STSExtractor {
 	}
 	
 	private Integer processStatement(Statement statement, String XReturn, Hashtable<String, String> RS, Integer initialLocation, String prefix, Hashtable<Integer, Integer> breakContinueLocations, Hashtable<String, String> SL) {
+//		if(statement.toString().replaceAll(" ", "").contains("Integer.valueOf")){
+//			System.out.println(statement);
+//		}
 		Integer finalLocation = initialLocation; 
 		switch(statement.getNodeType()){
 		case ASTNode.EXPRESSION_STATEMENT:
@@ -440,9 +443,9 @@ public class STSExtractor {
 	private String rename(Expression expression, final Hashtable<String, String> RS, final String prefix){
 		renamed = " " + expression.toString() + " ";
 		renamed = renamed.replaceAll("\\s+\\(", "(");
-		if(expression.toString().replaceAll(" ", "").contains("ReadPermission")){
-			System.out.println(expression);
-		}
+//		if(expression.toString().replaceAll(" ", "").contains("(user.location.x-x)*(user.location.x-x)")){
+//			System.out.println(expression);
+//		}
 		expression.accept(new ASTVisitor() {
 			@Override
 			public boolean visit(SimpleName simpleName) {
@@ -455,19 +458,20 @@ public class STSExtractor {
 						renamed = replace(renamed, simpleName.getIdentifier(), prefix + "_" + simpleName.getIdentifier());
 						addVariable(simpleName, prefix + "_" + simpleName.getIdentifier());
 					}else if(simpleName.getParent().toString().startsWith(simpleName.toString())){
-						renamed = replace(renamed, simpleName.getIdentifier(), prefix + "_" + simpleName.getIdentifier());
-						temp = prefix + "_" + simpleName.getIdentifier();
-					}else if(simpleName.getParent().toString().endsWith(simpleName.toString())){
-						renamed = replace(renamed, "." + simpleName.getIdentifier(), "_" + simpleName.getIdentifier());
-						addVariable(simpleName, temp + "_" + simpleName.getIdentifier());
+//						renamed = replace(renamed, simpleName.getIdentifier(), prefix + "_" + simpleName.getIdentifier());
+						temp = simpleName.getIdentifier();
+					}else if(simpleName.getParent().getParent().getNodeType()!=ASTNode.QUALIFIED_NAME){
+						renamed = replace(renamed, temp + "." + simpleName.getIdentifier(), prefix + "_" + temp.replaceAll("\\.", "_") + "_" + simpleName.getIdentifier());
+						addVariable(simpleName, prefix + "_" + temp.replaceAll("\\.", "_") + "_" + simpleName.getIdentifier());
 					} else{
-						renamed = replace(renamed, "." + simpleName.getIdentifier(), "_" + simpleName.getIdentifier());
-						temp += "_" + simpleName.getIdentifier();
+//						renamed = replace(renamed, "." + simpleName.getIdentifier(), "_" + simpleName.getIdentifier());
+						temp += "." + simpleName.getIdentifier();
 					}
 				}
 				return false;
 			}
 		});
+		renamed = renamed.replaceAll("\\.", "_");
 		return renamed;
 	}
 	
@@ -476,7 +480,7 @@ public class STSExtractor {
 		ITypeBinding iTypeBinding = resolveBinding.getVariableDeclaration().getType();
 		if(iTypeBinding.getQualifiedName().equals("boolean")
 				|| iTypeBinding.getQualifiedName().equals("java.lang.Boolean")){
-			sts.variables.add(new String[]{"bool", renamed});
+			sts.variables.add("bool,"+renamed);
 		} else if(iTypeBinding.getQualifiedName().equals("int")
 				|| iTypeBinding.getQualifiedName().equals("long")
 				|| iTypeBinding.getQualifiedName().equals("byte")
@@ -486,24 +490,25 @@ public class STSExtractor {
 				|| iTypeBinding.getQualifiedName().equals("java.lang.Byte")
 				|| iTypeBinding.getQualifiedName().equals("java.lang.Short")
 				|| iTypeBinding.getQualifiedName().equals("java.lang.BigInteger")){
-			sts.variables.add(new String[]{"int", renamed});
+			sts.variables.add("int,"+renamed);
 		} else if(iTypeBinding.getQualifiedName().equals("float")
 				|| iTypeBinding.getQualifiedName().equals("double")
 				|| iTypeBinding.getQualifiedName().equals("java.lang.Float")
 				|| iTypeBinding.getQualifiedName().equals("java.lang.Double")
 				|| iTypeBinding.getQualifiedName().equals("java.lang.BigDecimal")){
-			sts.variables.add(new String[]{"real", renamed});
+			sts.variables.add("real,"+renamed);
 		} else{
-			sts.variables.add(new String[]{"undef", renamed});
+			sts.variables.add("undef,"+renamed);
 		}
 	}
 	
 	private static String replace(String string, String find, String replace) {
-		String[] res = string.split(find);
+		String[] res = string.split(find.replaceAll("\\.", "\\\\."));
 		try{
 			string = "";
 			for (int i=0; i<res.length-1; i++) {
-				if(find.charAt(0)=='.'||(!Character.isLetter(res[i].charAt(res[i].length()-1))) && !Character.isLetter(res[i+1].charAt(0))
+				if(res[i].charAt(res[i].length()-1)!='.' &&
+						!Character.isLetter(res[i].charAt(res[i].length()-1)) && !Character.isLetter(res[i+1].charAt(0))
 						&& res[i].charAt(res[i].length()-1)!='_' && res[i+1].charAt(0)!='_' 
 						&& res[i+1].charAt(0)!='('){
 					string += res[i] + replace;

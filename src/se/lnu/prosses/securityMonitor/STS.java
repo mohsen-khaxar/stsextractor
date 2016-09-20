@@ -30,7 +30,7 @@ import org.project.automaton.Variable.VariableType;
 
 @SuppressWarnings("serial")
 public class STS extends AbstractBaseGraph<Integer, Transition> implements DirectedGraph<Integer, Transition>{
-	public Set<String[]> variables;
+	public Set<String> variables;
 	public Set<String> controllableMethodNames;
 	Set<String> controllableEvents;
 	
@@ -304,18 +304,19 @@ public class STS extends AbstractBaseGraph<Integer, Transition> implements Direc
 		for (String eventName : eventNames) {
 			events.add(new Event(EventType.C, eventName));
 		}
-		for (String[] variable : variables) {
+		for (String variable : variables) {
+			String[] variableParts = variable.split(",");
 			VariableType type;
-			if(variable[0].equals("int")){
+			if(variableParts[0].equals("int")){
 				type = VariableType.INT;
-			} else if(variable[0].equals("real")){
+			} else if(variableParts[0].equals("real")){
 				type = VariableType.FLOAT;
-			} else if(variable[0].equals("bool")){
+			} else if(variableParts[0].equals("bool")){
 				type = VariableType.BOOLEAN;
 			} else{
 				type = VariableType.UNDEFINED;
 			}
-			vars.add(new Variable(type , variable[1]));
+			vars.add(new Variable(type , variableParts[1]));
 		}
 		Automaton automaton = new Automaton("CaseStudy", events, vars, states);
 		return automaton;
