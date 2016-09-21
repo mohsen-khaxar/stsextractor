@@ -239,6 +239,7 @@ public class STS extends AbstractBaseGraph<Integer, Transition> implements Direc
 	}
 
 	private String replaceWithAssignment(String guard, String assignment) {
+		try{
 		String[] assignmentParts = assignment.split("=");
 		String[] guardParts = ("@" + guard + "@").split(assignmentParts[0].replaceAll(" ", ""));
 		String replace = "";
@@ -259,6 +260,9 @@ public class STS extends AbstractBaseGraph<Integer, Transition> implements Direc
 		}
 		guard += guardParts[guardParts.length-1];
 		guard = guard.substring(1, guard.length()-1);
+		}catch(Exception e){
+			e.printStackTrace();
+		}
 		return guard;
 	}
 	

@@ -444,7 +444,7 @@ public class JavaNormalizer {
 		return has;
 	}
 
-	private static ASTNode parse(String code, int type) {
+	public static ASTNode parse(String code, int type) {
 		ASTParser parser = ASTParser.newParser(AST.JLS4);
 		parser.setSource(code.toCharArray());
 		parser.setKind(type);

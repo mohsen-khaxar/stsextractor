@@ -15,6 +15,7 @@ import org.eclipse.jdt.core.dom.ASTParser;
 import org.eclipse.jdt.core.dom.ASTVisitor;
 import org.eclipse.jdt.core.dom.Assignment;
 import org.eclipse.jdt.core.dom.Block;
+import org.eclipse.jdt.core.dom.ClassInstanceCreation;
 import org.eclipse.jdt.core.dom.CompilationUnit;
 import org.eclipse.jdt.core.dom.Expression;
 import org.eclipse.jdt.core.dom.ExpressionStatement;
@@ -133,9 +134,9 @@ public class STSExtractor {
 	}
 	
 	private Integer processStatement(Statement statement, String XReturn, Hashtable<String, String> RS, Integer initialLocation, String prefix, Hashtable<Integer, Integer> breakContinueLocations, Hashtable<String, String> SL) {
-//		if(statement.toString().replaceAll(" ", "").contains("Integer.valueOf")){
-//			System.out.println(statement);
-//		}
+		if(statement.toString().replaceAll(" ", "").contains("new")){
+			System.out.println(statement);
+		}
 		Integer finalLocation = initialLocation; 
 		switch(statement.getNodeType()){
 		case ASTNode.EXPRESSION_STATEMENT:
@@ -143,7 +144,8 @@ public class STSExtractor {
 			if(expression.getNodeType()==ASTNode.METHOD_INVOCATION && (((MethodInvocation) expression).resolveMethodBinding().getDeclaringClass().getQualifiedName() + "." + ((MethodInvocation) expression).getName()).equals(DUMMY_METHOD)){
 				MethodInvocation dummyMethodInvocation = (MethodInvocation) expression;
 				finalLocation = processDummyMethodInvocation(dummyMethodInvocation, XReturn, RS, initialLocation, prefix, breakContinueLocations, SL);
-			}else if(expression.getNodeType()==ASTNode.METHOD_INVOCATION && canProcessMethod((MethodInvocation) expression)){
+			}else if((expression.getNodeType()==ASTNode.METHOD_INVOCATION || expression.getNodeType()==ASTNode.CLASS_INSTANCE_CREATION) 
+					&& canProcessMethod(expression)){
 				MethodInvocation methodInvocation = (MethodInvocation) expression;
 				finalLocation = processMethodInvocation(methodInvocation, XReturn, RS, initialLocation, prefix, breakContinueLocations, SL);
 			}else if(expression.getNodeType()==ASTNode.ASSIGNMENT){
@@ -199,18 +201,17 @@ public class STSExtractor {
 
 	private Integer processVariableDeclarationFragment(VariableDeclarationFragment variableDeclarationFragment,	String XReturn, Hashtable<String, String> RS, Integer initialLocation, String prefix, Hashtable<Integer, Integer> breakContinueLocations, Hashtable<String, String> SL) {
 		Integer finalLocation = initialLocation;
-		if(variableDeclarationFragment.getInitializer() instanceof MethodInvocation && canProcessMethod((MethodInvocation) variableDeclarationFragment.getInitializer())){
-			MethodInvocation methodInvocation = (MethodInvocation) variableDeclarationFragment.getInitializer();
-			String declaringClass = methodInvocation.resolveMethodBinding().getDeclaringClass().getQualifiedName();
-			String methodFullName = declaringClass.replaceAll("\\.", "_") + "_" + methodInvocation.getName();
-			Transition transition = new Transition(methodFullName, "true", getPassByValueMethodArgumentsUpdater(methodInvocation, RS, prefix) + getSecurityAssignments(SL, true));
+		if((variableDeclarationFragment.getInitializer() instanceof MethodInvocation || variableDeclarationFragment.getInitializer() instanceof ClassInstanceCreation) 
+				&& canProcessMethod(variableDeclarationFragment.getInitializer())){
+			Expression expression = ((Expression) variableDeclarationFragment.getInitializer());
+			String methodFullName = getMethodFullName(expression);
+			Transition transition = new Transition(methodFullName, "true", getPassByValueMethodArgumentsUpdater(expression, RS, prefix) + getSecurityAssignments(SL, true));
 			finalLocation = newLocation();
 			sts.addVertex(initialLocation);
 			sts.addVertex(finalLocation);
 			sts.addEdge(initialLocation, finalLocation, transition);
-			Hashtable<String, String> newRS = getRenamingRules(methodInvocation, prefix);
-			finalLocation = processBlock(getMethodBody(methodInvocation, newRS), rename(variableDeclarationFragment.getName(), newRS, prefix), newRS, finalLocation, prefix + "_" + 
-			(methodInvocation.getExpression()==null ? "" : methodInvocation.getExpression().toString()).replaceAll("\\.", "_") + "_" + methodInvocation.getName(), breakContinueLocations, SL);
+			Hashtable<String, String> newRS = getRenamingRules(expression, prefix);
+			finalLocation = processBlock(getMethodBody(expression), rename(variableDeclarationFragment.getName(), newRS, prefix), newRS, finalLocation, getScopedName(expression, prefix), breakContinueLocations, SL);
 		}else if (variableDeclarationFragment.getInitializer()!=null){
 			Transition transition = new Transition(Transition.TAU, "true", rename(variableDeclarationFragment.getName(), RS, prefix) + "=" + rename(variableDeclarationFragment.getInitializer(), RS, prefix) + getSecurityAssignments(SL, true));
 			finalLocation = newLocation();
@@ -219,6 +220,29 @@ public class STSExtractor {
 			sts.addEdge(initialLocation, finalLocation, transition);
 		};
 		return finalLocation;
+	}
+	
+	private String getScopedName(Expression expression, String prefix){
+		String scopedName = "";
+		if(expression instanceof MethodInvocation){
+			scopedName = prefix + "_" +	(((MethodInvocation)expression).getExpression()==null ? "" : ((MethodInvocation)expression).getExpression().toString()).replaceAll("\\.", "_") + "_" + ((MethodInvocation)expression).getName();
+		}else if(expression instanceof ClassInstanceCreation){
+			scopedName = prefix + "_" +	((ClassInstanceCreation)expression).resolveConstructorBinding().getDeclaringClass().getName();
+		}
+		return scopedName;
+	}
+
+	private String getMethodFullName(Expression expression) {
+		String declaringClass = ""; 
+		String methodFullName = "";
+		if(expression instanceof MethodInvocation){
+			declaringClass = ((MethodInvocation)expression).resolveMethodBinding().getDeclaringClass().getQualifiedName();
+			methodFullName = declaringClass.replaceAll("\\.", "_") + "_" + ((MethodInvocation)expression).getName().toString();
+		} else if(expression instanceof ClassInstanceCreation){
+			declaringClass = ((ClassInstanceCreation)expression).resolveConstructorBinding().getDeclaringClass().getQualifiedName();
+			methodFullName = declaringClass.replaceAll("\\.", "_") + "_" + ((ClassInstanceCreation)expression).resolveConstructorBinding().getDeclaringClass().getName();
+		}
+		return methodFullName;
 	}
 
 	private Integer processReturnStatement(ReturnStatement returnStatement, String XReturn, Hashtable<String, String> RS, Integer initialLocation, String prefix, Hashtable<Integer, Integer> breakContinueLocations, Hashtable<String, String> SL) {
@@ -236,18 +260,16 @@ public class STSExtractor {
 
 	private Integer processAssignment(Assignment assignment, String XReturn, Hashtable<String, String> RS, Integer initialLocation, String prefix, Hashtable<Integer, Integer> breakContinueLocations, Hashtable<String, String> SL) {
 		Integer finalLocation = initialLocation;
-		if(assignment.getRightHandSide() instanceof MethodInvocation && canProcessMethod((MethodInvocation) assignment.getRightHandSide())){
-			MethodInvocation methodInvocation = (MethodInvocation) assignment.getRightHandSide();
-			String declaringClass = methodInvocation.resolveMethodBinding().getDeclaringClass().getQualifiedName();
-			String methodFullName = declaringClass.replaceAll("\\.", "_") + "_" + methodInvocation.getName();
-			Transition transition = new Transition(methodFullName, "true", getPassByValueMethodArgumentsUpdater(methodInvocation, RS, prefix) + getSecurityAssignments(SL, true));
+		if((assignment.getRightHandSide() instanceof MethodInvocation || assignment.getRightHandSide() instanceof ClassInstanceCreation) 
+				&& canProcessMethod(assignment.getRightHandSide())){
+			Expression expression= assignment.getRightHandSide();
+			Transition transition = new Transition(getMethodFullName(expression), "true", getPassByValueMethodArgumentsUpdater(expression, RS, prefix) + getSecurityAssignments(SL, true));
 			finalLocation = newLocation();
 			sts.addVertex(initialLocation);
 			sts.addVertex(finalLocation);
 			sts.addEdge(initialLocation, finalLocation, transition);
-			Hashtable<String, String> newRS = getRenamingRules(methodInvocation, prefix);
-			finalLocation = processBlock(getMethodBody(methodInvocation, newRS), rename(assignment.getLeftHandSide(), newRS, prefix), newRS, finalLocation, prefix + "_" + 
-			(methodInvocation.getExpression()==null ? "" : methodInvocation.getExpression().toString()).replaceAll("\\.", "_") + "_" + methodInvocation.getName(), breakContinueLocations, SL);
+			Hashtable<String, String> newRS = getRenamingRules(expression, prefix);
+			finalLocation = processBlock(getMethodBody(expression), rename(assignment.getLeftHandSide(), newRS, prefix), newRS, finalLocation, getScopedName(expression, prefix), breakContinueLocations, SL);
 		}else{
 			Transition transition = new Transition(Transition.TAU, "true", rename(assignment, RS, prefix) + getSecurityAssignments(SL, true));
 			finalLocation = newLocation();
@@ -258,42 +280,49 @@ public class STSExtractor {
 		return finalLocation;
 	}
 
-	private boolean canProcessMethod(MethodInvocation methodInvocation) {
+	private boolean canProcessMethod(Expression expression) {
 		boolean res = false;
-		String declaringClass = methodInvocation.resolveMethodBinding().getDeclaringClass().getQualifiedName();
-		String methodFullName = declaringClass + "." + methodInvocation.getName();
+		String declaringClass = "";
+		if(expression instanceof MethodInvocation){
+			declaringClass = ((MethodInvocation)expression).resolveMethodBinding().getDeclaringClass().getQualifiedName();
+		}else if(expression instanceof ClassInstanceCreation){
+			declaringClass = ((ClassInstanceCreation)expression).resolveConstructorBinding().getDeclaringClass().getQualifiedName();
+		}
+		String methodFullName = declaringClass + "." + expression.toString().replaceAll("new\\s+", "");
 		if(canProcess(methodFullName)){
 			res = true;
 		}
 		return res;
 	}
 
-	private Integer processMethodInvocation(MethodInvocation methodInvocation, String XReturn,	Hashtable<String, String> RS, Integer initialLocation, String prefix, Hashtable<Integer, Integer> breakContinueLocations, Hashtable<String, String> SL) {
-		String declaringClass = methodInvocation.resolveMethodBinding().getDeclaringClass().getQualifiedName();
-		String methodFullName = declaringClass.replaceAll("\\.", "_") + "_" + methodInvocation.getName();
-		Transition transition = new Transition(methodFullName, "true", getPassByValueMethodArgumentsUpdater(methodInvocation, RS, prefix) + getSecurityAssignments(SL, true));
+	private Integer processMethodInvocation(Expression expression, String XReturn,	Hashtable<String, String> RS, Integer initialLocation, String prefix, Hashtable<Integer, Integer> breakContinueLocations, Hashtable<String, String> SL) {
+		Transition transition = new Transition(getMethodFullName(expression), "true", getPassByValueMethodArgumentsUpdater(expression, RS, prefix) + getSecurityAssignments(SL, true));
 		Integer finalLocation = newLocation();
 		sts.addVertex(initialLocation);
 		sts.addVertex(finalLocation);
 		sts.addEdge(initialLocation, finalLocation, transition);
-		Hashtable<String, String> newRS = getRenamingRules(methodInvocation, prefix);
-		finalLocation = processBlock(getMethodBody(methodInvocation, newRS), XReturn, newRS, finalLocation, prefix + "_" + 
-		(methodInvocation.getExpression()==null ? "" : methodInvocation.getExpression().toString()).replaceAll("\\.", "_") + "_" + methodInvocation.getName(), breakContinueLocations, SL);
+		Hashtable<String, String> newRS = getRenamingRules(expression, prefix);
+		finalLocation = processBlock(getMethodBody(expression), XReturn, newRS, finalLocation, getScopedName(expression, prefix), breakContinueLocations, SL);
 		return finalLocation;
 	}
 
 	@SuppressWarnings("rawtypes")
-	private String getPassByValueMethodArgumentsUpdater(MethodInvocation methodInvocation, Hashtable<String, String> RS, String prefix) {
-		ArrayList<String> methodParameters = getMethodParameters(methodInvocation, prefix + "_" + (methodInvocation.getExpression()==null ? "" : methodInvocation.getExpression().toString()).replaceAll("\\.", "_") + "_" + methodInvocation.getName());
-		List methodArguments = methodInvocation.arguments();
-		Hashtable<String, String> newRS = getRenamingRules(methodInvocation, prefix);
+	private String getPassByValueMethodArgumentsUpdater(Expression expression, Hashtable<String, String> RS, String prefix) {
+		ArrayList<String> methodParameters = getMethodParameters(expression, getScopedName(expression, prefix));
+		List arguments = null;
+		if(expression instanceof MethodInvocation){
+			arguments = ((MethodInvocation) expression).arguments();
+		}else if(expression instanceof ClassInstanceCreation){
+			arguments = ((ClassInstanceCreation) expression).arguments();
+		}
+		Hashtable<String, String> newRS = getRenamingRules(expression, prefix);
 		String res = "";
 		String separator = "";
 		for (int i=0; i< methodParameters.size(); i++) {
 			String methodParameter = methodParameters.get(i);
 			if(!newRS.containsKey(methodParameter)){
-					String fullParameterName = prefix + "_" + (methodInvocation.getExpression()==null ? "" : methodInvocation.getExpression().toString()).replaceAll("\\.", "_") + "_" + methodInvocation.getName() + "_" + methodParameter;
-					res += separator + fullParameterName + "=" + rename((Expression) methodArguments.get(i), RS, prefix);
+					String fullParameterName = getScopedName(expression, prefix) + "_" + methodParameter;
+					res += separator + fullParameterName  + "=" + rename((Expression) arguments.get(i), RS, prefix);
 				separator = ", ";
 			}
 		}
@@ -301,12 +330,23 @@ public class STSExtractor {
 	}
 
 	@SuppressWarnings("unchecked")
-	private ArrayList<String> getMethodParameters(MethodInvocation methodInvocation, String prefix) {
-		String declaringClass = methodInvocation.resolveMethodBinding().getDeclaringClass().getQualifiedName();
+	private ArrayList<String> getMethodParameters(Expression expression, String prefix) {
+		String declaringClass = "";
+		if(expression instanceof MethodInvocation){
+			declaringClass = ((MethodInvocation) expression).resolveMethodBinding().getDeclaringClass().getQualifiedName();
+		}else if(expression instanceof ClassInstanceCreation){
+			declaringClass = ((ClassInstanceCreation) expression).resolveConstructorBinding().getDeclaringClass().getQualifiedName();
+		}
 		TypeDeclaration cls = classes.get(declaringClass);
 		ArrayList<String> res = new ArrayList<>();
 		for (MethodDeclaration methodDeclaration : cls.getMethods()) {
-			if(methodDeclaration.getName().toString().equals(methodInvocation.getName().toString())){
+			String expressionResolveBinding = "";
+			if(expression instanceof MethodInvocation){
+				expressionResolveBinding  = ((MethodInvocation) expression).resolveMethodBinding().toString();
+			}else if(expression instanceof ClassInstanceCreation){
+				expressionResolveBinding = ((ClassInstanceCreation) expression).resolveConstructorBinding().toString();
+			}
+			if(methodDeclaration.resolveBinding().toString().equals(expressionResolveBinding)){
 				List<SingleVariableDeclaration> parameters = methodDeclaration.parameters();
 				for (SingleVariableDeclaration singleVariableDeclaration : parameters) {
 					res.add(singleVariableDeclaration.getName().getFullyQualifiedName());
@@ -318,12 +358,23 @@ public class STSExtractor {
 		return res;
 	}
 
-	private Block getMethodBody(MethodInvocation methodInvocation, Hashtable<String, String> RS) {
-		String declaringClass = methodInvocation.resolveMethodBinding().getDeclaringClass().getQualifiedName();
+	private Block getMethodBody(Expression expression) {
+		String declaringClass = "";
+		if(expression instanceof MethodInvocation){
+			declaringClass = ((MethodInvocation) expression).resolveMethodBinding().getDeclaringClass().getQualifiedName();
+		}else if(expression instanceof ClassInstanceCreation){
+			declaringClass = ((ClassInstanceCreation) expression).resolveConstructorBinding().getDeclaringClass().getQualifiedName();
+		}
 		TypeDeclaration cls = classes.get(declaringClass);
-		Block res = null;
+		Block res = expression.getAST().newBlock();
 		for (MethodDeclaration methodDeclaration : cls.getMethods()) {
-			if(methodDeclaration.getName().toString().equals(methodInvocation.getName().toString())){
+			String expressionResolveBinding = "";
+			if(expression instanceof MethodInvocation){
+				expressionResolveBinding  = ((MethodInvocation) expression).resolveMethodBinding().toString();
+			}else if(expression instanceof ClassInstanceCreation){
+				expressionResolveBinding = ((ClassInstanceCreation) expression).resolveConstructorBinding().toString();
+			}
+			if(methodDeclaration.resolveBinding().toString().equals(expressionResolveBinding)){
 				res = methodDeclaration.getBody();
 				break;
 			}
@@ -332,12 +383,17 @@ public class STSExtractor {
 	}
 
 	@SuppressWarnings("rawtypes")
-	private Hashtable<String, String> getRenamingRules(MethodInvocation methodInvocation, String prefix) {
-		ArrayList<String> methodParameters = getMethodParameters(methodInvocation, prefix + "_" + (methodInvocation.getExpression()==null ? "" : methodInvocation.getExpression().toString()).replaceAll("\\.", "_") + "_" + methodInvocation.getName());
-		List methodArguments = methodInvocation.arguments();
+	private Hashtable<String, String> getRenamingRules(Expression expression, String prefix) {
+		ArrayList<String> methodParameters = getMethodParameters(expression, getScopedName(expression, prefix));
+		List arguments = null;
+		if(expression instanceof MethodInvocation){
+			arguments = ((MethodInvocation) expression).arguments();
+		}else if(expression instanceof ClassInstanceCreation){
+			arguments = ((ClassInstanceCreation) expression).arguments();
+		}
 		Hashtable<String, String> res = new Hashtable<>();
-		for (int i=0; i< methodArguments.size(); i++) {
-			Object methodArgument = methodArguments.get(i);
+		for (int i=0; i< arguments.size(); i++) {
+			Object methodArgument = arguments.get(i);
 			if(methodArgument instanceof SimpleName){
 				ITypeBinding iTypeBinding = ((SimpleName) methodArgument).resolveTypeBinding();
 				if(!iTypeBinding.isPrimitive() 
@@ -350,7 +406,7 @@ public class STSExtractor {
 						&& !iTypeBinding.getQualifiedName().equals("java.lang.BigDecimal")
 						&& !iTypeBinding.getQualifiedName().equals("java.lang.BigInteger")
 						&& !iTypeBinding.getQualifiedName().equals("java.lang.Boolean")){
-					res.put(methodParameters.get(i), prefix + "_" + methodArguments.get(i).toString());
+					res.put(methodParameters.get(i), prefix + "_" + arguments.get(i).toString());
 				}
 			}
 		}
