@@ -62,6 +62,10 @@ public class STSExtractor {
 		return sts.convertToAutomaton();
 	}
 	
+	public String convertToReax(){
+		return sts.convertToReax();
+	}
+	
 	void getClasses(String directoryPath, String[] classPath) throws Exception{
 		String[] sourceDir = new String[]{directoryPath};
 		ArrayList<String> javaFilePaths = getAllJavaFilePaths(directoryPath);
@@ -99,7 +103,7 @@ public class STSExtractor {
 			fileWriter.write(variable.getName() + "\n");
 		}
 		fileWriter.close();
-		String reax = sts.converToReax();
+		String reax = sts.convertToReax();
 		System.out.println(reax);
 //		STS uncontrollableFreeSTS = sts.convertToUncontrollableFreeSTS();
 //		uncontrollableFreeSTS.saveAsDot(directoryPath + File.separator + "freemodel.dot");

@@ -337,7 +337,7 @@ public class STS extends AbstractBaseGraph<Integer, Transition> implements Direc
 		return guard;
 	}
 	
-	public String converToReax(){
+	public String convertToReax(){
 		Hashtable<String, String> transitionFunctions = new Hashtable<>();
 		HashSet<String> events = new HashSet<>();
 		transitionFunctions.put("LOC", "LOC' = -");
