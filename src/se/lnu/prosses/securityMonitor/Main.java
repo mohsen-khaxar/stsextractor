@@ -14,21 +14,22 @@ public class Main {
 //		includingFilter.add("javax\\.servlet.*");
 		ArrayList<String> entryPoints = new ArrayList<>();
 //		entryPoints.add(".*\\.mohsen");
-		entryPoints.add(".*\\.doGet");
-		entryPoints.add(".*\\.doPost");
-//		entryPoints.add(".*\\.f");
+//		entryPoints.add(".*\\.doGet");
+//		entryPoints.add(".*\\.doPost");
+		entryPoints.add(".*\\.f");
 		ArrayList<String> excludingFilter = new ArrayList<>();
 		STSExtractor stsExtractor = new STSExtractor(includingFilter, excludingFilter , entryPoints);
 		 Set<String> controllableMethodNames = new HashSet<>();
-		controllableMethodNames .add("se.lnu.Users.removeUser");
-		controllableMethodNames.add("se.lnu.User.getFriendAt");
-		controllableMethodNames.add("se.lnu.EstimateLocation.getDistance");
-		controllableMethodNames.add("se.lnu.EstimateLocation.estimatLocation");
-		controllableMethodNames.add("se.lnu.Users.findUserById");
-		controllableMethodNames.add("se.lnu.Users.addUser");
-		controllableMethodNames.add("se.lnu.Users.addFriend");
-		controllableMethodNames.add("se.lnu.Users.auth");
+//		controllableMethodNames .add("se.lnu.Users.removeUser");
+//		controllableMethodNames.add("se.lnu.User.getFriendAt");
+//		controllableMethodNames.add("se.lnu.EstimateLocation.getDistance");
+//		controllableMethodNames.add("se.lnu.EstimateLocation.estimatLocation");
+//		controllableMethodNames.add("se.lnu.Users.findUserById");
+//		controllableMethodNames.add("se.lnu.Users.addUser");
+//		controllableMethodNames.add("se.lnu.Users.addFriend");
+//		controllableMethodNames.add("se.lnu.Users.auth");
 		controllableMethodNames.add("se.lnu.Test.g");
+//		controllableMethodNames.add("se.lnu.Test.f");
 		stsExtractor.extract(directoryPath, classPath, controllableMethodNames);
 	}
 }

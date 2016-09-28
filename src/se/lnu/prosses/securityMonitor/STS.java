@@ -33,6 +33,7 @@ public class STS extends AbstractBaseGraph<Integer, Transition> implements Direc
 	public Set<String> variables;
 	public Set<String> controllableMethodNames;
 	Set<String> controllableEvents;
+	public Hashtable<Integer, String> securityLabelling;
 	
 	static EdgeFactory<Integer, Transition> ef = new EdgeFactory<Integer, Transition>() {
 		@Override
@@ -46,6 +47,7 @@ public class STS extends AbstractBaseGraph<Integer, Transition> implements Direc
 		this.variables = new HashSet<>();
 		this.controllableMethodNames = new HashSet<>();
 		this.controllableEvents = new HashSet<>(); 
+		this.securityLabelling = new Hashtable<>();
 	}
 	
 	public void generateAspect(String sourcePath, String targetPath) throws IOException{
@@ -333,6 +335,109 @@ public class STS extends AbstractBaseGraph<Integer, Transition> implements Direc
 		guard = guard.replaceAll("\\|\\|", " or ");
 		guard = guard.replaceAll("!", " not ");
 		return guard;
+	}
+	
+	public String converToReax(){
+		Hashtable<String, String> transitionFunctions = new Hashtable<>();
+		HashSet<String> events = new HashSet<>();
+		transitionFunctions.put("LOC", "LOC' = -");
+		for (String variable : variables) {
+			String[] variableParts = variable.split(",");
+			transitionFunctions.put(variableParts[1], variableParts[1] + "' = -");
+		}
+		for (Transition transition : this.edgeSet()) {
+			events.add(transition.getEvent());
+			transitionFunctions.put("LOC", transitionFunctions.get("LOC") + "else if " + transition.getEvent() + " and LOC="	+ this.getEdgeSource(transition) 
+			+ " and (" + convertToSTSSyntax(transition.getGuard()) + ")" + " then " + this.getEdgeTarget(transition) + " \n");
+			if(!transition.getUpadater().equals("")){
+				String[] updaterParts = transition.getUpadater().split(";");
+				for (String updaterPart : updaterParts) {
+					String leftHandSide = "";
+					try{
+						leftHandSide = updaterPart.substring(0, updaterPart.indexOf("=")).replaceAll(" ", "");
+					}catch(Exception e){
+						e.printStackTrace();
+					}
+					String rightHandSide = convertToSTSSyntax(updaterPart.substring(updaterPart.indexOf("=")+1, updaterPart.length()));
+					transitionFunctions.put(leftHandSide, transitionFunctions.get(leftHandSide) + "else if " + transition.getEvent() + " and LOC="	+ this.getEdgeSource(transition) 
+					+ " and (" + convertToSTSSyntax(transition.getGuard()) + ")" + " then " + rightHandSide + "\n");
+				}
+			}
+		}
+		Integer maxLocation = 0;
+		for (Integer location : this.vertexSet()) {
+			if(location>maxLocation){
+				maxLocation = location;
+			}
+		}
+		String stateSection = "!state\nLOC : uint[" + (Math.round(Math.log(maxLocation)/Math.log(2))+1) + "];\n";
+		for (String variable : variables) {
+			String[] variableParts = variable.split(",");
+			if(stateSection.contains(" : " + variableParts[0] + ";")){
+				stateSection = stateSection.replaceFirst(" : " + variableParts[0] + ";", ", " + variableParts[1] + " : " + variableParts[0] + ";");
+			}else{
+				stateSection += variableParts[1] + " : " + variableParts[0] + ";\n";
+			}
+		}
+		String inputSection = "!input\n";
+		String separator = "";
+		for (String event : events) {
+			if(!this.controllableMethodNames.contains(event.replaceAll("_", "\\."))){
+				inputSection += separator + event;
+				separator = ", ";
+			}
+		}
+		inputSection += " : bool;\n\n";
+		String controllableSection = "!controllable\n";
+		separator = "";
+		for (String event : controllableMethodNames) {
+			controllableSection += separator + event.replaceAll( "\\.", "_");
+			separator = ", ";
+		}
+		controllableSection += " : bool;\n\n";
+		String transitionSection = "!transition\n";
+		for (String key : transitionFunctions.keySet()) {
+			if(transitionFunctions.get(key).equals(key + "' = -")){
+				transitionSection += key + "' = " + key + ";\n\n";
+			}else{
+				transitionSection += transitionFunctions.get(key).replaceFirst("-else ", "") + "else " + key + ";\n\n";
+			}
+		}
+		Integer minLocation = Integer.MAX_VALUE;
+		for (Integer location : this.vertexSet()) {
+			if(location<minLocation){
+				minLocation = location;
+			}
+		}
+		String initialSection = "!initial\nLOC=" + minLocation + ";\n\n";
+		String invariantSection = "!invariant\n";
+		separator = "";
+		String[] SLPrefixes = {"LXC_", "LXI_", "LIC_", "LII_"};
+		for (Transition transition : this.edgeSet()) {
+			if(!transition.getUpadater().equals("")){
+				String[] upadaterParts = transition.getUpadater().split(";");
+				for (String upadaterPart : upadaterParts) {
+					if(!upadaterPart.split("=")[0].startsWith("LXC_")
+							&& !upadaterPart.split("=")[0].startsWith("LXI_")
+							&& !upadaterPart.split("=")[0].startsWith("LIC_")
+							&& !upadaterPart.split("=")[0].startsWith("LII_")){
+						for (String SLPrefix : SLPrefixes) {
+							if(securityLabelling.get(this.getEdgeTarget(transition))!=null){
+								String[] securityLabellingParts = securityLabelling.get(this.getEdgeTarget(transition)).split(";");
+								for (String securityLabellingPart : securityLabellingParts) {
+									if(securityLabellingPart.replaceAll(" ", "").startsWith(SLPrefix+upadaterPart.split("=")[0].replaceAll(" ", ""))){
+										invariantSection += separator + "(LOC<>" + this.getEdgeTarget(transition) + " or " + securityLabellingPart + ")";
+										separator = " and ";
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+		invariantSection += ";";
+		return stateSection + inputSection + controllableSection + transitionSection + initialSection + invariantSection;
 	}
 }
 
