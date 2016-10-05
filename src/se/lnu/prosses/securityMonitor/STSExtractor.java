@@ -1,7 +1,10 @@
 package se.lnu.prosses.securityMonitor;
 
+import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileWriter;
+import java.io.IOException;
+import java.io.InputStreamReader;
 import java.util.ArrayList;
 import java.util.Hashtable;
 import java.util.List;
@@ -64,6 +67,73 @@ public class STSExtractor {
 	
 	public String convertToReax(){
 		return sts.convertToReax();
+	}
+	
+	String runReax(String reaxScript){
+		String res = "";
+		try {
+			String reaxScriptFile = "_reax.ctrln";
+			FileWriter fileWriter = new FileWriter(new File(reaxScriptFile), false);
+			fileWriter.write(reaxScript);
+			fileWriter.close();
+			Process process = Runtime.getRuntime().exec("reax " + reaxScriptFile + " -a 'sS:d={O},deads' -t --debug D2");
+			process.waitFor();
+		    BufferedReader bufferedReader = new BufferedReader(new InputStreamReader(process.getInputStream()));
+		    String line = "";
+		    while ((line = bufferedReader.readLine())!= null) {
+		    	res += line + "\n";
+		    }
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+		res = res.substring(res.indexOf("Triangularized controller:\n"));
+		res = res.substring(0, res.indexOf("["));
+		return res;
+	}
+	
+	STS makeControlled(String reaxResult){
+		Hashtable<String, String> securityGuards = new Hashtable<>();
+		String[] parts = reaxResult.split(";");
+		for (String part : parts) {
+			String event = part.substring(0, part.indexOf("=")).replaceAll("'\\s", "");
+			String[] orParts = part.substring(part.indexOf("=")+1, part.length()).split("or");
+			for (String orPart : orParts) {
+				String[] andParts = orPart.split("and");
+				String[] locations = null;
+				for (String andPart : andParts) {
+					if(andPart.startsWith(" LOC ")){
+						andPart = andPart.replaceAll("[^\\d,]", "");
+						locations = andPart.split(",");
+						break;
+					}
+				}
+				orPart = orPart.replaceAll("LOC = \\d+", "true").replaceAll("LOC in \\{(\\s*\\d+\\s*,?)+\\}", "true");
+				for (String location : locations) {
+					String value = securityGuards.get(event+","+location)==null ? orPart : securityGuards.get(event+","+location)+" or "+orPart;
+					securityGuards.put(event+","+location, value);
+				}
+			}
+		}
+		STS res = (STS) sts.clone();
+		for (Transition transition : res.edgeSet()) {
+			transition.setGuard(securityGuards.get(transition.getEvent().replaceAll("\\s", "")+","+res.getEdgeSource(transition)));
+		}
+		return res;
+	}
+	
+	public STS generateControlledSTS(){
+		String reaxScript = convertToReax();
+		String reaxResult = runReax(reaxScript);
+		return makeControlled(reaxResult);
+	}
+	
+	public static void main(String[] args) {
+		STSExtractor se = new STSExtractor(null, null, null);
+		
+	}
+	
+	public void generateAspect(String sourcePath, String targetPath) throws IOException{
+		sts.generateAspect(sourcePath, targetPath);
 	}
 	
 	void getClasses(String directoryPath, String[] classPath) throws Exception{
