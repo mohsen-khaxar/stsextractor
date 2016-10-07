@@ -6,8 +6,8 @@ import java.util.Set;
 
 public class Main {
 	public static void main(String[] args) throws Exception {
-		String directoryPath = "C:\\Users\\khmo222\\git\\runningexample\\src";
-		String[] classPath = new String[]{"C:\\tools\\apache-tomcat-6.0.4\\lib\\servlet-api.jar", "C:\\Users\\khmo222\\git\\stsextractor\\src"};
+		String directoryPath = "/home/mohsen/git/runningexample//src";
+		String[] classPath = new String[]{"/home/mohsen/servlet-api.jar", "/home/mohsen/git/stsextractor/src"};
 		ArrayList<String> includingFilter = new ArrayList<String>();
 		includingFilter.add("se\\.lnu.*");
 //		includingFilter.add("java\\.sql.*");
@@ -18,8 +18,7 @@ public class Main {
 //		entryPoints.add(".*\\.doPost");
 		entryPoints.add(".*\\.f");
 		ArrayList<String> excludingFilter = new ArrayList<>();
-		STSExtractor stsExtractor = new STSExtractor(includingFilter, excludingFilter , entryPoints);
-		 Set<String> controllableMethodNames = new HashSet<>();
+		Set<String> controllableMethodNames = new HashSet<>();
 //		controllableMethodNames .add("se.lnu.Users.removeUser");
 //		controllableMethodNames.add("se.lnu.User.getFriendAt");
 //		controllableMethodNames.add("se.lnu.EstimateLocation.getDistance");
@@ -30,6 +29,16 @@ public class Main {
 //		controllableMethodNames.add("se.lnu.Users.auth");
 		controllableMethodNames.add("se.lnu.Test.g");
 //		controllableMethodNames.add("se.lnu.Test.f");
+		STSExtractor stsExtractor = new STSExtractor(includingFilter, excludingFilter , entryPoints, controllableMethodNames);
 		stsExtractor.extract(directoryPath, classPath, controllableMethodNames);
+//		stsExtractor.sts;
+//		STS csts = stsExtractor.generateControlledSTS();
+//		for (Transition transition : csts.edgeSet()) {
+//			if(csts.getEdgeTarget(transition)<0){
+//				transition.getGuard();
+//			}
+//		}
+//		STS fsts = csts.convertToUncontrollableFreeSTS();
+//		fsts.generateAspect(sourcePath, targetPath);
 	}
 }

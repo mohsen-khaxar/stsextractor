@@ -10,5 +10,5 @@ public interface MonitorHelper {
 
 	public void setCurrentLocation(Integer monitorInstanceId, Integer currentLocation);
 
-	public Object[] applyCountermeasure(Object thisObject, Object[] parameters);
+	public Object[] applyCountermeasure(String fullQualifiedMethodName, Object thisObject, Object[] parameters);
 }

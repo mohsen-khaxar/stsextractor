@@ -6,11 +6,11 @@ import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.Hashtable;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-
 
 import org.eclipse.jdt.core.JavaCore;
 import org.eclipse.jdt.core.dom.AST;
@@ -46,14 +46,14 @@ public class STSExtractor {
 	public ArrayList<String> includingFilter;
 	public ArrayList<String> excludingFilter;
 	public ArrayList<String> entryPoints;
-	private STS sts;
+	public STS sts;
 	private Hashtable<String, TypeDeclaration> classes = new Hashtable<>();
 	final static String DUMMY_METHOD = "se.lnu.SL.def";
-	public STSExtractor(ArrayList<String> includingFilter, ArrayList<String> excludingFilter, ArrayList<String> entryPoints) {
+	public STSExtractor(ArrayList<String> includingFilter, ArrayList<String> excludingFilter, ArrayList<String> entryPoints, Set<String> controllableMethodNames) {
 		this.includingFilter = includingFilter;
 		this.excludingFilter = excludingFilter;
 		this.entryPoints = entryPoints;
-		this.sts = new STS();
+		this.sts = new STS(controllableMethodNames);
 		Transition transition =  new Transition(Transition.START, "true", "");
 		sts.addVertex(0);
 		sts.addVertex(1);
@@ -77,9 +77,9 @@ public class STSExtractor {
 			FileWriter fileWriter = new FileWriter(new File(reaxScriptFile), false);
 			fileWriter.write(reaxScript);
 			fileWriter.close();
-			Process process = Runtime.getRuntime().exec("reax " + reaxScriptFile + " -a 'sS:d={O},deads' -t --debug D2");
+			Process process = Runtime.getRuntime().exec("reax  " + reaxScriptFile + " -a sS:d={P},deads -t --debug D2");
 			process.waitFor();
-		    BufferedReader bufferedReader = new BufferedReader(new InputStreamReader(process.getInputStream()));
+		    BufferedReader bufferedReader = new BufferedReader(new InputStreamReader(process.getErrorStream()));
 		    String line = "";
 		    while ((line = bufferedReader.readLine())!= null) {
 		    	res += line + "\n";
@@ -87,37 +87,80 @@ public class STSExtractor {
 		} catch (Exception e) {
 			e.printStackTrace();
 		}
-		res = res.substring(res.indexOf("Triangularized controller:\n"));
-		res = res.substring(0, res.indexOf("["));
+		if(res.indexOf("Triangularized controller:\n")!=-1){
+			res = res.substring(res.indexOf("Triangularized controller:")+27);
+			res = res.substring(0, res.indexOf("["));
+		}else{
+			res = "";
+		}
 		return res;
 	}
 	
-	STS makeControlled(String reaxResult){
+	Hashtable<String, String> getSecurityGuards(String reaxResult){
 		Hashtable<String, String> securityGuards = new Hashtable<>();
 		String[] parts = reaxResult.split(";");
 		for (String part : parts) {
-			String event = part.substring(0, part.indexOf("=")).replaceAll("'\\s", "");
-			String[] orParts = part.substring(part.indexOf("=")+1, part.length()).split("or");
-			for (String orPart : orParts) {
-				String[] andParts = orPart.split("and");
-				String[] locations = null;
-				for (String andPart : andParts) {
-					if(andPart.startsWith(" LOC ")){
-						andPart = andPart.replaceAll("[^\\d,]", "");
-						locations = andPart.split(",");
-						break;
+			if(!part.replaceAll("\\s", "").equals("")){
+				String event = part.substring(0, part.indexOf("=")).replaceAll("['\\s]", "");
+				String[] orParts = part.substring(part.indexOf("=")+1, part.length()).split("or");
+				for (String orPart : orParts) {
+					String[] andParts = orPart.split("and");
+					String[] locations = null;
+					for (String andPart : andParts) {
+						if(andPart.matches("\\s*LOC\\s*in.*")){
+							andPart = andPart.replaceAll("[^\\d,]", "");
+							locations = andPart.split(",");
+							break;
+						}
 					}
-				}
-				orPart = orPart.replaceAll("LOC = \\d+", "true").replaceAll("LOC in \\{(\\s*\\d+\\s*,?)+\\}", "true");
-				for (String location : locations) {
-					String value = securityGuards.get(event+","+location)==null ? orPart : securityGuards.get(event+","+location)+" or "+orPart;
-					securityGuards.put(event+","+location, value);
+					orPart = orPart.replaceAll("LOC = \\d+", "true").replaceAll("LOC in \\{(\\s*\\d+\\s*,?)+\\}", "true");
+					if(locations==null){
+						String value = securityGuards.get(event+",-1")==null ? orPart : securityGuards.get(event+",-1")+" or "+orPart;
+						securityGuards.put(event+",-1", value);
+					}else{
+						for (String location : locations) {
+							String value = securityGuards.get(event+","+location)==null ? orPart : securityGuards.get(event+","+location)+" or "+orPart;
+							securityGuards.put(event+","+location, value);
+						}
+					}
 				}
 			}
 		}
+		return securityGuards;
+	}
+	
+	STS makeControlled(String reaxResult){
 		STS res = (STS) sts.clone();
-		for (Transition transition : res.edgeSet()) {
-			transition.setGuard(securityGuards.get(transition.getEvent().replaceAll("\\s", "")+","+res.getEdgeSource(transition)));
+		if(!reaxResult.equals("")){
+			Hashtable<String, String> securityGuards = getSecurityGuards(reaxResult);
+			Set<Transition> transitions = new HashSet<>();
+			transitions.addAll(res.edgeSet());
+			for (Transition transition : transitions) {
+				if(res.controllableEvents.contains(transition.getEvent()) && !transition.getEvent().equals(Transition.START)){
+					String guard = "";
+					String separator = "";
+					if(securityGuards.get(transition.getEvent().replaceAll("\\s", "")+",-1")!=null){
+						guard = securityGuards.get(transition.getEvent().replaceAll("\\s", "")+",-1");
+						separator = " or ";
+					}
+					if(securityGuards.get(transition.getEvent().replaceAll("\\s", "")+","+res.getEdgeSource(transition))!=null){
+						guard += separator + securityGuards.get(transition.getEvent().replaceAll("\\s", "")+","+res.getEdgeSource(transition));
+					}
+					if(guard.equals("")){
+						guard = "false";
+					}
+					transition.setGuard(guard);
+					Transition insecureTransition = new Transition(transition.getEvent(), " not (" + guard + ")", transition.upadater);
+					if(!res.vertexSet().contains(-res.getEdgeTarget(transition))){
+						res.addVertex(-res.getEdgeTarget(transition));
+					}
+					res.addEdge(res.getEdgeSource(transition), -res.getEdgeTarget(transition), insecureTransition);
+					Transition returnTransition = new Transition(Transition.RETURN, "true", "");
+					res.addEdge(-res.getEdgeTarget(transition), res.getEdgeTarget(transition), returnTransition);
+					
+					((Transition)(res.incomingEdgesOf(res.getEdgeSource(transition)).toArray()[0])).setEvent(Transition.PARAMETER);
+				}
+			}
 		}
 		return res;
 	}
@@ -129,7 +172,7 @@ public class STSExtractor {
 	}
 	
 	public static void main(String[] args) {
-		STSExtractor se = new STSExtractor(null, null, null);
+		STSExtractor se = new STSExtractor(null, null, null, null);
 		
 	}
 	
@@ -166,16 +209,21 @@ public class STSExtractor {
 		}
 		removeTemporaryFiles(directoryPath);
 		System.out.println("DONE.");
-		sts.saveAsDot(directoryPath + File.separator + "model.dot");
-		Automaton automaton = sts.convertToAutomaton();
-		FileWriter fileWriter = new FileWriter(directoryPath + File.separator + "vars.txt");
-		List<Variable> vars = automaton.getVariables();
-		for (Variable variable : vars) {
-			fileWriter.write(variable.getName() + "\n");
-		}
-		fileWriter.close();
-		String reax = sts.convertToReax();
-		System.out.println(reax);
+//		sts.saveAsDot(directoryPath + File.separator + "model.dot");
+//		Automaton automaton = sts.convertToAutomaton();
+//		FileWriter fileWriter = new FileWriter(directoryPath + File.separator + "vars.txt");
+//		List<Variable> vars = automaton.getVariables();
+//		for (Variable variable : vars) {
+//			fileWriter.write(variable.getName() + "\n");
+//		}
+//		fileWriter.close();
+//		STS controlledSTS = generateControlledSTS();
+//		controlledSTS.saveAsDot("/home/mohsen/aspects/modelc.dot");
+//		controlledSTS = controlledSTS.convertToUncontrollableFreeSTS();
+//		controlledSTS.saveAsDot("/home/mohsen/aspects/freemodelc.dot");
+//		controlledSTS.generateAspect(directoryPath, "/home/mohsen/aspects");
+//		String reax = sts.convertToReax();
+//		System.out.println(reax);
 //		STS uncontrollableFreeSTS = sts.convertToUncontrollableFreeSTS();
 //		uncontrollableFreeSTS.saveAsDot(directoryPath + File.separator + "freemodel.dot");
 //		uncontrollableFreeSTS.generateAspect(directoryPath, "P:\\aspects");
@@ -216,7 +264,7 @@ public class STSExtractor {
 	}
 	
 	private Integer processStatement(Statement statement, String XReturn, Hashtable<String, String> RS, Integer initialLocation, String prefix, Hashtable<Integer, Integer> breakContinueLocations, Hashtable<String, String> SL) {
-		if(initialLocation==37){
+		if(initialLocation==4){
 			System.out.println(statement);
 		}
 		Integer finalLocation = initialLocation; 
@@ -290,8 +338,24 @@ public class STSExtractor {
 		if((variableDeclarationFragment.getInitializer() instanceof MethodInvocation || variableDeclarationFragment.getInitializer() instanceof ClassInstanceCreation) 
 				&& canProcessMethod(variableDeclarationFragment.getInitializer())){
 			Expression expression = ((Expression) variableDeclarationFragment.getInitializer());
-			String methodFullName = getMethodFullName(expression);
-			Transition transition = new Transition(methodFullName, "true", getPassByValueMethodArgumentsUpdater(expression, RS, prefix) + getSecurityAssignments(SL));
+			String methodArgumentsUpdater = getMethodArgumentsUpdater(expression, RS, prefix);
+			for (String part : methodArgumentsUpdater.split(";")) {
+				String leftHandSide = part.substring(0, part.indexOf("=")).replaceAll(" ", "");
+				SL.remove(leftHandSide + "," + "XC");
+				SL.remove(leftHandSide + "," + "IC");
+				SL.remove(leftHandSide + "," + "XI");
+				SL.remove(leftHandSide + "," + "II");
+			}
+			Transition transition = new Transition(Transition.TAU, "true", methodArgumentsUpdater + getSecurityAssignments(SL) 
+			+ getSecurityAssignment(methodArgumentsUpdater, "XC") + getSecurityAssignment(methodArgumentsUpdater, "XI") 
+			+ getSecurityAssignment(methodArgumentsUpdater.replaceAll(";", " && PC;"), "IC") + getSecurityAssignment(methodArgumentsUpdater.replaceAll(";", " && PC;"), "II"));
+			finalLocation = newLocation();
+			sts.addVertex(initialLocation);
+			sts.addVertex(finalLocation);
+			sts.addEdge(initialLocation, finalLocation, transition);
+			updateStsSecurityLabelling(initialLocation, finalLocation);
+			transition = new Transition(getMethodFullName(expression), "true", "");
+			initialLocation = finalLocation;
 			finalLocation = newLocation();
 			sts.addVertex(initialLocation);
 			sts.addVertex(finalLocation);
@@ -300,7 +364,10 @@ public class STSExtractor {
 			Hashtable<String, String> newRS = getRenamingRules(expression, prefix);
 			finalLocation = processBlock(getMethodBody(expression), rename(variableDeclarationFragment.getName(), newRS, prefix), newRS, finalLocation, getScopedName(expression, prefix), breakContinueLocations, SL);
 		}else if (variableDeclarationFragment.getInitializer()!=null){
-			Transition transition = new Transition(Transition.TAU, "true", rename(variableDeclarationFragment.getName(), RS, prefix) + "=" + rename(variableDeclarationFragment.getInitializer(), RS, prefix) + ";" + getSecurityAssignments(SL));
+			String rename = rename(variableDeclarationFragment.getName(), RS, prefix) + "=" + rename(variableDeclarationFragment.getInitializer(), RS, prefix) + ";";
+			Transition transition = new Transition(Transition.TAU, "true", rename + 
+					getSecurityAssignments(SL) + getSecurityAssignment(rename, "XC") + getSecurityAssignment(rename, "XI") + 
+					getSecurityAssignment(rename.replaceAll(";", " && PC;"), "IC") + getSecurityAssignment(rename.replaceAll(";", " && PC;"), "II"));
 			finalLocation = newLocation();
 			sts.addVertex(initialLocation);
 			sts.addVertex(finalLocation);
@@ -361,17 +428,24 @@ public class STSExtractor {
 		if((assignment.getRightHandSide() instanceof MethodInvocation || assignment.getRightHandSide() instanceof ClassInstanceCreation) 
 				&& canProcessMethod(assignment.getRightHandSide())){
 			Expression expression= assignment.getRightHandSide();
-			String passByValueMethodArgumentsUpdater = getPassByValueMethodArgumentsUpdater(expression, RS, prefix);
-			String leftHandSide = passByValueMethodArgumentsUpdater.substring(0, passByValueMethodArgumentsUpdater.indexOf("=")).replaceAll(" ", "");
-			SL.remove(leftHandSide + "," + "XC");
-			SL.remove(leftHandSide + "," + "IC");
-			SL.remove(leftHandSide + "," + "XI");
-			SL.remove(leftHandSide + "," + "II");
-			Transition transition = new Transition(getMethodFullName(expression), "true", passByValueMethodArgumentsUpdater + getSecurityAssignments(SL) 
-			+ getSecurityAssignment(passByValueMethodArgumentsUpdater, "XC") + getSecurityAssignment(passByValueMethodArgumentsUpdater, "XI") 
-			+ getSecurityAssignment(passByValueMethodArgumentsUpdater.replaceAll(";", " && PC;"), "IC") + getSecurityAssignment(passByValueMethodArgumentsUpdater.replaceAll(";", " && PC;"), "II"));
-//			sts.variables.add("bool,LIC_" + leftHandSide);
-//			sts.variables.add("bool,LII_" + leftHandSide);
+			String methodArgumentsUpdater = getMethodArgumentsUpdater(expression, RS, prefix);
+			for (String part : methodArgumentsUpdater.split(";")) {
+				String leftHandSide = part.substring(0, part.indexOf("=")).replaceAll(" ", "");
+				SL.remove(leftHandSide + "," + "XC");
+				SL.remove(leftHandSide + "," + "IC");
+				SL.remove(leftHandSide + "," + "XI");
+				SL.remove(leftHandSide + "," + "II");
+			}
+			Transition transition = new Transition(Transition.TAU, "true", methodArgumentsUpdater + getSecurityAssignments(SL) 
+			+ getSecurityAssignment(methodArgumentsUpdater, "XC") + getSecurityAssignment(methodArgumentsUpdater, "XI") 
+			+ getSecurityAssignment(methodArgumentsUpdater.replaceAll(";", " && PC;"), "IC") + getSecurityAssignment(methodArgumentsUpdater.replaceAll(";", " && PC;"), "II"));
+			finalLocation = newLocation();
+			sts.addVertex(initialLocation);
+			sts.addVertex(finalLocation);
+			sts.addEdge(initialLocation, finalLocation, transition);
+			updateStsSecurityLabelling(initialLocation, finalLocation);
+			transition = new Transition(getMethodFullName(expression), "true", "");
+			initialLocation = finalLocation;
 			finalLocation = newLocation();
 			sts.addVertex(initialLocation);
 			sts.addVertex(finalLocation);
@@ -449,8 +523,25 @@ public class STSExtractor {
 	}
 
 	private Integer processMethodInvocation(Expression expression, String XReturn,	Hashtable<String, String> RS, Integer initialLocation, String prefix, Hashtable<Integer, Integer> breakContinueLocations, Hashtable<String, String> SL) {
-		Transition transition = new Transition(getMethodFullName(expression), "true", getPassByValueMethodArgumentsUpdater(expression, RS, prefix) + getSecurityAssignments(SL));
+		String methodArgumentsUpdater = getMethodArgumentsUpdater(expression, RS, prefix);
+		for (String part : methodArgumentsUpdater.split(";")) {
+			String leftHandSide = part.substring(0, part.indexOf("=")).replaceAll(" ", "");
+			SL.remove(leftHandSide + "," + "XC");
+			SL.remove(leftHandSide + "," + "IC");
+			SL.remove(leftHandSide + "," + "XI");
+			SL.remove(leftHandSide + "," + "II");
+		}
+		Transition transition = new Transition(Transition.TAU, "true", methodArgumentsUpdater + getSecurityAssignments(SL) 
+		+ getSecurityAssignment(methodArgumentsUpdater, "XC") + getSecurityAssignment(methodArgumentsUpdater, "XI") 
+		+ getSecurityAssignment(methodArgumentsUpdater.replaceAll(";", " && PC;"), "IC") + getSecurityAssignment(methodArgumentsUpdater.replaceAll(";", " && PC;"), "II"));
 		Integer finalLocation = newLocation();
+		sts.addVertex(initialLocation);
+		sts.addVertex(finalLocation);
+		sts.addEdge(initialLocation, finalLocation, transition);
+		updateStsSecurityLabelling(initialLocation, finalLocation);
+		transition = new Transition(getMethodFullName(expression), "true", "");
+		initialLocation = finalLocation;
+		finalLocation = newLocation();
 		sts.addVertex(initialLocation);
 		sts.addVertex(finalLocation);
 		sts.addEdge(initialLocation, finalLocation, transition);
@@ -476,7 +567,7 @@ public class STSExtractor {
 	}
 
 	@SuppressWarnings("rawtypes")
-	private String getPassByValueMethodArgumentsUpdater(Expression expression, Hashtable<String, String> RS, String prefix) {
+	private String getMethodArgumentsUpdater(Expression expression, Hashtable<String, String> RS, String prefix) {
 		ArrayList<String> methodParameters = getMethodParameters(expression, getScopedName(expression, prefix));
 		List arguments = null;
 		if(expression instanceof MethodInvocation){
@@ -488,10 +579,10 @@ public class STSExtractor {
 		String res = "";
 		for (int i=0; i< methodParameters.size(); i++) {
 			String methodParameter = methodParameters.get(i);
-			if(!newRS.containsKey(methodParameter)){
-					String fullParameterName = getScopedName(expression, prefix) + "_" + methodParameter;
-					res += fullParameterName  + "=" + rename((Expression) arguments.get(i), RS, prefix) + ";";
-			}
+			String fullParameterName = getScopedName(expression, prefix) + "_" + methodParameter;
+//			if(!newRS.containsKey(methodParameter)){
+			res += fullParameterName  + "=" + rename((Expression) arguments.get(i), RS, prefix) + ";";
+//			}
 		}
 		return res;
 	}

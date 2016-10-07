@@ -9,6 +9,8 @@ public class Transition extends DefaultEdge {
 	String upadater;
 	static final public String TAU = "TAU";
 	public static final String START = "START";
+	public static final String RETURN = "RETURN";
+	public static final String PARAMETER = "PARAMETER";
 	
 	public Transition(){
 		

@@ -5,13 +5,16 @@ import java.io.FileWriter;
 import java.io.IOException;
 import java.io.Writer;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Hashtable;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 import org.eclipse.jdt.core.dom.CompilationUnit;
 import org.eclipse.jdt.core.dom.MethodDeclaration;
+import org.eclipse.jdt.core.dom.SingleVariableDeclaration;
 import org.eclipse.jdt.core.dom.TypeDeclaration;
 import org.jgrapht.DirectedGraph;
 import org.jgrapht.EdgeFactory;
@@ -42,14 +45,22 @@ public class STS extends AbstractBaseGraph<Integer, Transition> implements Direc
 		}
 	};
 	
-	public STS() {
+	public STS(Set<String> controllableMethodNames) {
 		super(ef, true, true);
 		this.variables = new HashSet<>();
-		this.controllableMethodNames = new HashSet<>();
-		this.controllableEvents = new HashSet<>(); 
+		this.controllableMethodNames = controllableMethodNames;
+		controllableEvents = new HashSet<>();
+		for (String controllableMethodName : this.controllableMethodNames) {
+			controllableMethodName = controllableMethodName.replaceAll("\\.", "_");
+			controllableEvents.add(controllableMethodName);
+		}
+		controllableEvents.add(Transition.START);
+		controllableEvents.add(Transition.RETURN);
+		controllableEvents.add(Transition.PARAMETER);
 		this.securityLabelling = new Hashtable<>();
 	}
 	
+	@SuppressWarnings("unchecked")
 	public void generateAspect(String sourcePath, String targetPath) throws IOException{
 		Hashtable<String, TypeDeclaration> classes = getClasses(sourcePath);
 		for (String controllableMethodName : controllableMethodNames) {
@@ -65,8 +76,8 @@ public class STS extends AbstractBaseGraph<Integer, Transition> implements Direc
 			fileWriter.write("import " + className + ";\n");
 			fileWriter.write("import se.lnu.MonitorHelper;\n");
 			fileWriter.write("public aspect " + controllableMethodName.replaceAll("\\.", "") + "Monitor{\n");
-			fileWriter.write("pointcut pointcup() : call(* " + controllableMethodName + "(..));\n");
-			fileWriter.write(methodDeclaration.getReturnType2().toString() + " around(" + parameters + ", " + className + " target) : pointcup() && target(target) && args(" + parameterNames + ") {\n");
+			fileWriter.write("pointcut pc() : call(* " + controllableMethodName + "(..));\n");
+			fileWriter.write(methodDeclaration.getReturnType2().toString() + " around(" + parameters + ", " + className + " target) : pc() && target(target) && args(" + parameterNames + ") {\n");
 			fileWriter.write("MonitorHelper monitorHelper = null;\n");
 			fileWriter.write("try {monitorHelper = (MonitorHelper)Class.forName(\"se.lnu.MonitorHelperImpl\").newInstance();} catch (Exception e) {e.printStackTrace();}\n");
 			fileWriter.write("Integer monitorInstanceId = monitorHelper.getMonitorInstanceId(thisJoinPoint, thisJoinPointStaticPart, thisEnclosingJoinPointStaticPart);\n");
@@ -76,14 +87,19 @@ public class STS extends AbstractBaseGraph<Integer, Transition> implements Direc
 			for (Transition transition : this.edgeSet()) {
 				if(transition.getEvent().equals(controllableMethodName.replaceAll("\\.", "_"))){
 					check = true;
-					fileWriter.write("if(currentLocation==" + this.getEdgeSource(transition) + " && " + convertToJavaSyntax(transition.getGuard(), methodDeclaration.parameters()) + "){\n");
+					try{
+					fileWriter.write("if(currentLocation==" + this.getEdgeSource(transition) + " && " + 
+					convertToJavaSyntax(transition.getGuard(), methodDeclaration.parameters(), getArgumentParameterMap(transition.getUpadater())) + "){\n");
+					}catch (Exception e) {
+						e.printStackTrace();
+					}
 					fileWriter.write("currentLocation = " + this.getEdgeTarget(transition) + ";\n");
 					fileWriter.write("}else ");
 				}
 			}
 			if(check){
 				fileWriter.write("{\n");
-				fileWriter.write("res = monitorHelper.applyCountermeasure(target, thisJoinPoint.getArgs());\n");
+				fileWriter.write("res = monitorHelper.applyCountermeasure(\"" + controllableMethodName + "\", target, thisJoinPoint.getArgs());\n");
 				fileWriter.write("currentLocation = (Integer)res[1];\n");
 				fileWriter.write("}\n");
 			}
@@ -106,28 +122,45 @@ public class STS extends AbstractBaseGraph<Integer, Transition> implements Direc
 		}
 	}
 	
+	private Map<String, String> getArgumentParameterMap(String upadater) {
+		String[] parts = upadater.split(";");
+		HashMap<String, String> res = new HashMap<>();
+		for (String part : parts) {
+			String leftHandSide = part.replaceAll("\\s", "").split("=")[0];
+			String rightHandSide = part.replaceAll("\\s", "").split("=")[1];
+			if(!leftHandSide.matches("L(XC|IC|XI|II)_")){
+				res.put(rightHandSide, leftHandSide);
+			}
+		}
+		return res;
+	}
+
 	public static void main(String[] args) {
 	}
 	
-	@SuppressWarnings("rawtypes")
-	private String convertToJavaSyntax(String guard, List parameters) {
-		guard = guard.replaceAll("=", "==");
-		guard = guard.replaceAll("<>", "!=");
-		guard = guard.replaceAll(" and ", "&&");
-		guard = guard.replaceAll(" or ", "||" );
-		guard = guard.replaceAll(" not ", "!");
-		String[] guardParts = guard.replaceAll("\\W\\d+\\W", "").split("\\W+");
+	private String convertToJavaSyntax(String guard, List<SingleVariableDeclaration> parameters, Map<String, String> argumentParameterMap) {
+		guard = guard.replaceAll("=", " == ");
+		guard = guard.replaceAll("<>", " != ");
+		guard = guard.replaceAll(" and ", " && ");
+		guard = guard.replaceAll(" or ", " || " );
+		guard = guard.replaceAll(" not ", " ! ");
+		String[] guardParts = guard.replaceAll("\\W\\d+\\W|(\\s*true\\s*)|(\\s*false\\s*)|\\s", "").split("\\W+");
 		sort(guardParts);		
 		for (String guardPart : guardParts) {
-			if(!guardPart.replaceAll(" ", "").equals("")){
-				String[] parts = guardPart.split("_");
+			if(!guardPart/*.replaceAll(" ", "")*/.equals("")){
+				String[] parts = null;
+				if(argumentParameterMap.get(guardPart)!=null){
+					parts = argumentParameterMap.get(guardPart).split("_");
+				}else{
+					parts = guardPart.split("_");
+				}
 				boolean check = true;
 				for (int i = 0; i < parameters.size(); i++) {
-					if(parts[parts.length-1].replaceAll(" ", "").equals(parameters.get(i).toString().replaceAll(" ", ""))){
+					if(parts[parts.length-1].replaceAll(" ", "").equals(parameters.get(i).getName().toString().replaceAll(" ", ""))){
 						check = false;
 					}
 				}
-				if(check){
+				if(check /*&& !parts[parts.length-1].matches("(\\s*[+-]?\\d*.?\\d+\\s*)|(\\s*true\\s*)|(\\s*false\\s*)")*/){
 					guard = guard.replaceAll(guardPart, "target." + parts[parts.length-1]);
 				}else{
 					guard = guard.replaceAll(guardPart, parts[parts.length-1]);
@@ -181,12 +214,6 @@ public class STS extends AbstractBaseGraph<Integer, Transition> implements Direc
 	}
 	
 	public STS convertToUncontrollableFreeSTS(){
-		controllableEvents = new HashSet<>();
-		for (String controllableMethodName : controllableMethodNames) {
-			controllableMethodName = controllableMethodName.replaceAll("\\.", "_");
-			controllableEvents.add(controllableMethodName);
-		}
-		controllableEvents.add(Transition.START);
 		STS sts = (STS) this.clone();
 		Transition transition = nextUncontrollable(sts);
 		while(transition!=null){
@@ -202,25 +229,114 @@ public class STS extends AbstractBaseGraph<Integer, Transition> implements Direc
 			transition = nextUncontrollable(sts);
 		}
 		clearUpdaters(sts);
+		removeSTARTTransitions(sts);
 		return sts;
 	}
 	
+	private void removeSTARTTransitions(STS sts) {
+		Set<Transition> transitions = new HashSet<>();
+		for (Transition transition : sts.edgeSet()) {
+			if(transition.getEvent().equals(Transition.START)){
+				transitions.add(transition);
+			}
+		}
+		for (Transition transition : transitions) {
+			Integer target = sts.getEdgeTarget(transition);
+			Set<Transition> outgoingTransitions = new HashSet<>();
+			outgoingTransitions.addAll(sts.outgoingEdgesOf(target));
+			for (Transition outgoingTransition : outgoingTransitions) {
+				sts.removeEdge(outgoingTransition);
+				sts.addEdge(0, sts.getEdgeTarget(outgoingTransition), outgoingTransition);
+			}
+			Set<Transition> incomingTransitions = new HashSet<>();
+			incomingTransitions.addAll(sts.incomingEdgesOf(target));
+			for (Transition incomingTransition : incomingTransitions) {
+				sts.removeEdge(incomingTransition);
+				sts.addEdge(sts.getEdgeSource(incomingTransition), 0, incomingTransition);
+			}
+			sts.removeEdge(transition);
+			sts.removeVertex(target);
+		}
+	}
+
 	private void clearUpdaters(STS sts) {
-		for (Transition t : sts.edgeSet()) {
-			t.setUpadater("");
+		Set<Transition> transitions = new HashSet<>();
+		transitions.addAll(sts.edgeSet());
+		for (Transition transition : transitions) {
+			String updater = "";
+			if(transition.getEvent().equals(Transition.PARAMETER)){
+				updater = transition.getUpadater().replaceAll("L(XC|IC|XI|II)_", "@@");
+				updater = updater.substring(0, updater.indexOf("@@"));
+				for (Transition transition2 : sts.outgoingEdgesOf(sts.getEdgeTarget(transition))) {
+					transition2.setUpadater(updater);
+					sts.addEdge(sts.getEdgeSource(transition), sts.getEdgeTarget(transition2), transition2);
+				}
+				sts.removeVertex(sts.getEdgeTarget(transition));
+				sts.removeEdge(transition);
+			}else{
+				transition.setUpadater("?");
+			}
 		}
 	}
 
 	private void mergeTransitions(STS sts, Transition incomingTransition, Transition outgoingTransition) {
 		if(controllableEvents.contains(incomingTransition.getEvent()) || sts.getEdgeSource(incomingTransition)!=sts.getEdgeTarget(outgoingTransition)){
-			String guard = convertToSTSSyntax(incomingTransition.getGuard()) + " and " + getWeakestPrecondition(convertToSTSSyntax(outgoingTransition.getGuard()), incomingTransition.getUpadater());
-			guard = guard.replaceAll("\\s?true\\s?and\\s?", "").replaceAll("\\s?and\\s?true\\s?", "");
-			String updater = incomingTransition.getUpadater() + "," + outgoingTransition.getUpadater();
+			String guard1 = convertToSTSSyntax(incomingTransition.getGuard()).replaceAll("\\s+", " ");
+			if(needParenthesis(guard1)){
+				guard1 = "(" + guard1 + ")";
+			}
+			String guard2 = getWeakestPrecondition(convertToSTSSyntax(outgoingTransition.getGuard())
+					, getControllableTransitionUpdater(incomingTransition)).replaceAll("\\s+", " ");
+			if(!guard2.matches(" true | false ") && guard2.contains(" or ")){
+				guard2 = "(" + guard2 + ")";
+			}
+			String guard = guard1 + " and " + guard2;
+			guard = guard.replaceAll("\\s?true\\s?and\\s?", " ").replaceAll("\\s?and\\s?true\\s?", " ").replaceAll("\\s+", " ");
+			String updater = incomingTransition.getUpadater() + outgoingTransition.getUpadater();
 			Transition newTransition = new Transition(incomingTransition.getEvent(), guard, updater);
 			sts.addEdge(sts.getEdgeSource(incomingTransition), sts.getEdgeTarget(outgoingTransition), newTransition);
 		}
 	}
 	
+	private boolean needParenthesis(String guard) {
+		boolean res = !guard.matches(" true | false ") 
+				&& guard.contains(" or ")
+				&& !guard.matches(".* or [^\\(]*\\).*");
+		guard = guard.replaceAll("\\s", "");
+		if(guard.charAt(0)=='(' && guard.charAt(guard.length()-1)==')'){
+			int c = 0;
+			for (int i = 1; i < guard.length()-1; i++) {
+				if(guard.charAt(i)=='('){
+					c++;
+				}else if(guard.charAt(i)==')'){
+					c--;
+				}
+				if(c<0){
+					break;
+				}
+			}
+			if(c==0){
+				res = false;
+			}
+		}
+		return res;
+	}
+
+	private String getControllableTransitionUpdater(Transition transition) {
+		String res = transition.getUpadater();
+//		if(controllableEvents.contains(transition.getEvent())){
+//			String[] parts = transition.getUpadater().split(";");
+//			for (String part : parts) {
+//				if(part.matches("\\s*L(XC|IC|XI|II)_.+")){
+//					res += part + ";";
+//				}
+//			}
+//		}else{
+//			res = transition.getUpadater();
+//		}
+		return res;
+	}
+
 	private Transition nextUncontrollable(STS sts) {
 		Transition res = null;
 		for (Transition transition : sts.edgeSet()) {
@@ -233,7 +349,7 @@ public class STS extends AbstractBaseGraph<Integer, Transition> implements Direc
 	}
 	
 	private String getWeakestPrecondition(String guard, String upadater) {
-		String[] assignments = upadater.split(",");
+		String[] assignments = upadater.split(";");
 		for (int i=assignments.length-1; i>=0; i--) {
 			guard = replaceWithAssignment(guard, assignments[i]);
 		}
@@ -382,7 +498,7 @@ public class STS extends AbstractBaseGraph<Integer, Transition> implements Direc
 		String inputSection = "!input\n";
 		String separator = "";
 		for (String event : events) {
-			if(!this.controllableMethodNames.contains(event.replaceAll("_", "\\."))){
+			if(!this.controllableEvents.contains(event)){
 				inputSection += separator + event;
 				separator = ", ";
 			}
@@ -390,8 +506,8 @@ public class STS extends AbstractBaseGraph<Integer, Transition> implements Direc
 		inputSection += " : bool;\n\n";
 		String controllableSection = "!controllable\n";
 		separator = "";
-		for (String event : controllableMethodNames) {
-			controllableSection += separator + event.replaceAll( "\\.", "_");
+		for (String event : controllableEvents) {
+			controllableSection += separator + event;
 			separator = ", ";
 		}
 		controllableSection += " : bool;\n\n";
