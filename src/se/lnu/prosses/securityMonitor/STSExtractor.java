@@ -150,7 +150,7 @@ public class STSExtractor {
 						guard = "false";
 					}
 					transition.setGuard(guard);
-					Transition insecureTransition = new Transition(transition.getEvent(), " not (" + guard + ")", transition.upadater);
+					Transition insecureTransition = new Transition(transition.getEvent(), " not (" + guard.replaceAll("\\s+", " ") + ")", transition.upadater);
 					if(!res.vertexSet().contains(-res.getEdgeTarget(transition))){
 						res.addVertex(-res.getEdgeTarget(transition));
 					}

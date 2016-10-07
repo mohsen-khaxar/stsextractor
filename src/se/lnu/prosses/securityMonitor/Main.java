@@ -1,5 +1,6 @@
 package se.lnu.prosses.securityMonitor;
 
+import java.io.File;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.Set;
@@ -31,14 +32,11 @@ public class Main {
 //		controllableMethodNames.add("se.lnu.Test.f");
 		STSExtractor stsExtractor = new STSExtractor(includingFilter, excludingFilter , entryPoints, controllableMethodNames);
 		stsExtractor.extract(directoryPath, classPath, controllableMethodNames);
-//		stsExtractor.sts;
-//		STS csts = stsExtractor.generateControlledSTS();
-//		for (Transition transition : csts.edgeSet()) {
-//			if(csts.getEdgeTarget(transition)<0){
-//				transition.getGuard();
-//			}
-//		}
-//		STS fsts = csts.convertToUncontrollableFreeSTS();
-//		fsts.generateAspect(sourcePath, targetPath);
+		stsExtractor.sts.saveAsDot(directoryPath + File.separator + "model.dot");
+		STS controlledSTS = stsExtractor.generateControlledSTS();
+		controlledSTS.saveAsDot("/home/mohsen/aspects/modelc.dot");
+		controlledSTS = controlledSTS.convertToUncontrollableFreeSTS();
+		controlledSTS.saveAsDot("/home/mohsen/aspects/freemodelc.dot");
+		controlledSTS.generateAspect(directoryPath, "/home/mohsen/aspects");
 	}
 }

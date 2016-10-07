@@ -1,14 +1,35 @@
 package se.lnu;
 
+import java.util.HashMap;
+
 import org.aspectj.lang.JoinPoint;
 import org.aspectj.lang.JoinPoint.StaticPart;
 
-public interface MonitorHelper {
-	public Integer getMonitorInstanceId(JoinPoint thisJoinPoint, StaticPart thisJoinPointStaticPart, StaticPart thisEnclosingJoinPointStaticPart);
+public class MonitorHelper {
+	static HashMap<Long, Integer> locations = new HashMap<>();
 
-	public Integer getCurrentLocation(Integer monitorInstanceId);
+	static public Long getMonitorInstanceId(JoinPoint thisJoinPoint, StaticPart thisJoinPointStaticPart, StaticPart thisEnclosingJoinPointStaticPart) {
+		Long monitorInstanceId = Thread.currentThread().getId();
+		if(!locations.containsKey(monitorInstanceId)) {
+			locations.put(monitorInstanceId, 0);
+		}
+		return monitorInstanceId;
+	}
+	
+	static public void removeMonitorInstanceId(Long monitorInstanceId) {
+		locations.remove(monitorInstanceId);
+	}
 
-	public void setCurrentLocation(Integer monitorInstanceId, Integer currentLocation);
+	static public Integer getCurrentLocation(Long monitorInstanceId) {
+		return locations.get(monitorInstanceId);
+	}
 
-	public Object[] applyCountermeasure(String fullQualifiedMethodName, Object thisObject, Object[] parameters);
+	static public void setCurrentLocation(Long monitorInstanceId, Integer currentLocation) {
+		locations.put(monitorInstanceId, currentLocation);
+	}
+
+	static public Object[] applyCountermeasure(String fullQualifiedMethodName, Object thisObject, Object[] parameters) {
+		// TODO Auto-generated method stub
+		return null;
+	}
 }

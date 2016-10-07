@@ -78,44 +78,64 @@ public class STS extends AbstractBaseGraph<Integer, Transition> implements Direc
 			fileWriter.write("public aspect " + controllableMethodName.replaceAll("\\.", "") + "Monitor{\n");
 			fileWriter.write("pointcut pc() : call(* " + controllableMethodName + "(..));\n");
 			fileWriter.write(methodDeclaration.getReturnType2().toString() + " around(" + parameters + ", " + className + " target) : pc() && target(target) && args(" + parameterNames + ") {\n");
-			fileWriter.write("MonitorHelper monitorHelper = null;\n");
-			fileWriter.write("try {monitorHelper = (MonitorHelper)Class.forName(\"se.lnu.MonitorHelperImpl\").newInstance();} catch (Exception e) {e.printStackTrace();}\n");
-			fileWriter.write("Integer monitorInstanceId = monitorHelper.getMonitorInstanceId(thisJoinPoint, thisJoinPointStaticPart, thisEnclosingJoinPointStaticPart);\n");
-			fileWriter.write("Integer currentLocation = monitorHelper.getCurrentLocation(monitorInstanceId);\n");
+//			fileWriter.write("MonitorHelperImpl monitorHelper = new MonitorHelperImpl();\n");
+//			fileWriter.write("try {monitorHelper = (MonitorHelper)Class.forName(\"se.lnu.MonitorHelperImpl\").newInstance();} catch (Exception e) {e.printStackTrace();}\n");
+			fileWriter.write("Integer MonitorInstanceId = MonitorHelper.getMonitorInstanceId(thisJoinPoint, thisJoinPointStaticPart, thisEnclosingJoinPointStaticPart);\n");
+			fileWriter.write("Integer currentLocation = MonitorHelper.getCurrentLocation(monitorInstanceId);\n");
 			fileWriter.write("Object[] res = null;\n");
+			fileWriter.write("\tboolean violation=false;\n");
 			boolean check = false;
 			for (Transition transition : this.edgeSet()) {
-				if(transition.getEvent().equals(controllableMethodName.replaceAll("\\.", "_"))){
+				if(transition.getEvent().equals(controllableMethodName.replaceAll("\\.", "_")) && this.getEdgeSource(transition)>=0){
 					check = true;
-					try{
 					fileWriter.write("if(currentLocation==" + this.getEdgeSource(transition) + " && " + 
 					convertToJavaSyntax(transition.getGuard(), methodDeclaration.parameters(), getArgumentParameterMap(transition.getUpadater())) + "){\n");
-					}catch (Exception e) {
-						e.printStackTrace();
+					if(this.getEdgeTarget(transition)==0){
+						fileWriter.write("\tMonitorHelper.removeMonitorInstanceId(monitorInstanceId);\n");
+					}else if(this.getEdgeTarget(transition)<0){
+						fileWriter.write("\tcurrentLocation = " + this.getEdgeTarget(transition) + ";\n");
+						fileWriter.write("\tviolation=true;\n");
+					}else {
+						fileWriter.write("\tcurrentLocation = " + this.getEdgeTarget(transition) + ";\n");
 					}
-					fileWriter.write("currentLocation = " + this.getEdgeTarget(transition) + ";\n");
 					fileWriter.write("}else ");
 				}
 			}
 			if(check){
-				fileWriter.write("{\n");
-				fileWriter.write("res = monitorHelper.applyCountermeasure(\"" + controllableMethodName + "\", target, thisJoinPoint.getArgs());\n");
-				fileWriter.write("currentLocation = (Integer)res[1];\n");
-				fileWriter.write("}\n");
+				fileWriter.write("{ throw new Exception(\"Safty Violation\");}\n");
 			}
-			fileWriter.write("monitorHelper.setCurrentLocation(monitorInstanceId, currentLocation);\n");
-			fileWriter.write("if(((Integer)res[0])!=0){\n");
+			fileWriter.write("\n");
+			for (Transition transition : this.edgeSet()) {
+				if(transition.getEvent().equals(controllableMethodName.replaceAll("\\.", "_")) && this.getEdgeSource(transition)<0){
+					check = true;
+					fileWriter.write("if(currentLocation==" + this.getEdgeSource(transition) + " && " + 
+					convertToJavaSyntax(transition.getGuard(), methodDeclaration.parameters(), getArgumentParameterMap(transition.getUpadater())) + "){\n");
+					if(this.getEdgeTarget(transition)==0){
+						fileWriter.write("\tMonitorHelper.removeMonitorInstanceId(monitorInstanceId);\n");
+					}else {
+						fileWriter.write("\tcurrentLocation = " + this.getEdgeTarget(transition) + ";\n");
+					}
+					fileWriter.write("}else ");
+				}
+			}
+			if(check){
+				fileWriter.write("{ throw new Exception(\"Safty Violation\");}\n");
+			}
+			fileWriter.write("MonitorHelper.setCurrentLocation(monitorInstanceId, currentLocation);\n");
+			fileWriter.write("if(violation){\n");
+			fileWriter.write("\tres = MonitorHelper.applyCountermeasure(\"" + controllableMethodName + "\", target, thisJoinPoint.getArgs());\n");
+			fileWriter.write("\tif(((Integer)res[0])==0){\n");
 			String args = "";
-//			for (int i = 2; i < methodDeclaration.parameters().size()+2; i++) {
-//				args += "res[" + i + "], ";
-//			}
 			parts = parameters.replaceAll("  ", " ").split(" ");
 			int c = 2;
 			for (int i = 0; i < parts.length; i+=2) {
 				args += "(" + parts[i] + ")res[" + c++ + "], ";
 			}
-			fileWriter.write("return proceed(" + args + " target);\n");
-			fileWriter.write("} else { return null;}\n");
+			fileWriter.write("\treturn proceed(" + args + " target);\n");
+			fileWriter.write("\t} else {\n");
+			fileWriter.write("\tMonitorHelper.removeMonitorInstanceId(monitorInstanceId);\n");
+			fileWriter.write("\tthrow new Exception(\"Security Violation\");\n\t}\n");
+			fileWriter.write("}\n");
 			fileWriter.write("}\n");
 			fileWriter.write("}");
 			fileWriter.close();
@@ -123,13 +143,15 @@ public class STS extends AbstractBaseGraph<Integer, Transition> implements Direc
 	}
 	
 	private Map<String, String> getArgumentParameterMap(String upadater) {
-		String[] parts = upadater.split(";");
 		HashMap<String, String> res = new HashMap<>();
-		for (String part : parts) {
-			String leftHandSide = part.replaceAll("\\s", "").split("=")[0];
-			String rightHandSide = part.replaceAll("\\s", "").split("=")[1];
-			if(!leftHandSide.matches("L(XC|IC|XI|II)_")){
-				res.put(rightHandSide, leftHandSide);
+		if(!upadater.replaceAll("\\s", "").equals("")){
+			String[] parts = upadater.split(";");
+			for (String part : parts) {
+				String leftHandSide = part.replaceAll("\\s", "").split("=")[0];
+				String rightHandSide = part.replaceAll("\\s", "").split("=")[1];
+				if(!leftHandSide.matches("L(XC|IC|XI|II)_")){
+					res.put(rightHandSide, leftHandSide);
+				}
 			}
 		}
 		return res;
@@ -264,17 +286,28 @@ public class STS extends AbstractBaseGraph<Integer, Transition> implements Direc
 		transitions.addAll(sts.edgeSet());
 		for (Transition transition : transitions) {
 			String updater = "";
+			Integer source = sts.getEdgeSource(transition);
+			Integer target = sts.getEdgeTarget(transition);
 			if(transition.getEvent().equals(Transition.PARAMETER)){
 				updater = transition.getUpadater().replaceAll("L(XC|IC|XI|II)_", "@@");
 				updater = updater.substring(0, updater.indexOf("@@"));
-				for (Transition transition2 : sts.outgoingEdgesOf(sts.getEdgeTarget(transition))) {
+				Set<Transition> outgoingTransitions = new HashSet<>();
+				outgoingTransitions.addAll(sts.outgoingEdgesOf(target));
+				for (Transition transition2 : outgoingTransitions) {
 					transition2.setUpadater(updater);
-					sts.addEdge(sts.getEdgeSource(transition), sts.getEdgeTarget(transition2), transition2);
+					sts.removeEdge(transition2);
+					sts.addEdge(source, sts.getEdgeTarget(transition2), transition2);
 				}
-				sts.removeVertex(sts.getEdgeTarget(transition));
+				if(sts.outDegreeOf(target)==0){
+					sts.removeVertex(target);
+				}
 				sts.removeEdge(transition);
-			}else{
-				transition.setUpadater("?");
+			}else if(transition.getEvent().equals(Transition.RETURN)){
+				sts.removeAllEdges(source, target);
+				transition.setUpadater("");
+				transition.setEvent(((Transition)(sts.incomingEdgesOf(source).toArray()[0])).getEvent());
+				transition.setGuard("true");
+				sts.addEdge(source, target, transition);
 			}
 		}
 	}
