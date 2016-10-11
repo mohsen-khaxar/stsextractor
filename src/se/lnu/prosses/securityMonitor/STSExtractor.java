@@ -39,10 +39,11 @@ import org.eclipse.jdt.core.dom.VariableDeclarationFragment;
 import org.eclipse.jdt.core.dom.VariableDeclarationStatement;
 import org.eclipse.jdt.core.dom.WhileStatement;
 import org.project.automaton.Automaton;
-import org.project.automaton.Variable;
 
 public class STSExtractor {
 	int newLocation = 1;
+	int pcLevel = 0;
+	int maxPcLevel = 0;
 	public ArrayList<String> includingFilter;
 	public ArrayList<String> excludingFilter;
 	public ArrayList<String> entryPoints;
@@ -681,14 +682,26 @@ public class STSExtractor {
 		return finalLocation;
 	}
 
+	@SuppressWarnings("unchecked")
 	private Integer processWhileStatement(WhileStatement whileStatement, String XReturn, Hashtable<String, String> RS, Integer initialLocation, String prefix, Hashtable<Integer, Integer> breakContinueLocations, Hashtable<String, String> SL) {
 		String whileExpression = rename(whileStatement.getExpression(), RS, prefix);
 		SL.remove("PC,IC");
 		SL.remove("PC,II");
+		Hashtable <String, String> SLNotWhileBody = (Hashtable<String, String>) SL.clone();
+		ArrayList<Expression> modifiedInWhileBody = getPossibleModifiedVariables(whileStatement.getBody());
+		String implicitInderentWhileBody = "";
+		for (Expression expression : modifiedInWhileBody) {
+			implicitInderentWhileBody += rename(expression, RS, prefix) + "=" + rename(expression, RS, prefix) + "&&PC;";
+			SLNotWhileBody.remove(rename(expression, RS, prefix) + ",IC");
+			SLNotWhileBody.remove(rename(expression, RS, prefix) + ",II");
+		}
+		pcLevel++;
 		Transition entranceTransition = new Transition(Transition.TAU, whileExpression, getSecurityAssignments(SL)
-				+ getSecurityAssignment("PC=" + whileExpression + "&&PC", "IC") + getSecurityAssignment("PC=" + whileExpression + "&&PC", "II"));
-		Transition exitTransition = new Transition(Transition.TAU, "  not (" + whileExpression + ")", getSecurityAssignments(SL)
-				+ getSecurityAssignment("PC=" + whileExpression + "&&PC", "IC") + getSecurityAssignment("PC=" + whileExpression + "&&PC", "II"));
+				+ getSecurityAssignment("PC=" + whileExpression + "&&PC", "IC") + getSecurityAssignment("PC=" + whileExpression + "&&PC", "II")
+				+ getSecurityAssignment("PC" + pcLevel + "=PC", "IC") + getSecurityAssignment("PC" + pcLevel + "=PC", "II"));
+		Transition exitTransition = new Transition(Transition.TAU, "  not (" + whileExpression + ")", getSecurityAssignments(SLNotWhileBody)
+				+ getSecurityAssignment("PC=" + whileExpression + "&&PC", "IC") + getSecurityAssignment("PC=" + whileExpression + "&&PC", "II")
+				+ getSecurityAssignment(implicitInderentWhileBody, "IC") + getSecurityAssignment(implicitInderentWhileBody, "II"));
 		Integer entranceLocation = newLocation();
 		Integer finalLocation = newLocation();
 		sts.addVertex(initialLocation);
@@ -699,7 +712,14 @@ public class STSExtractor {
 		sts.addEdge(initialLocation, finalLocation, exitTransition);
 		updateStsSecurityLabelling(initialLocation, finalLocation);
 		Integer tempLocation = processStatement(whileStatement.getBody(), XReturn, RS, entranceLocation, prefix, breakContinueLocations, SL);
-		Transition tempTransition =  new Transition(Transition.TAU, "true", getSecurityAssignments(SL));
+		pcLevel--;
+		String slpc = "";
+		if(pcLevel==0){
+			slpc = "LIC_PC=false;LII_PC=true;";
+		}else{
+			slpc = getSecurityAssignment("PC" + "=PC" + pcLevel, "IC") + getSecurityAssignment("PC" + "=PC" + pcLevel, "II");
+		}
+		Transition tempTransition =  new Transition(Transition.TAU, "true", getSecurityAssignments(SL) + slpc);
 		sts.addVertex(tempLocation);
 		sts.addEdge(tempLocation, initialLocation, tempTransition);
 		updateStsSecurityLabelling(tempLocation, initialLocation);
@@ -717,14 +737,36 @@ public class STSExtractor {
 		return finalLocation;
 	}
 
+	@SuppressWarnings("unchecked")
 	private Integer processIfStatement(IfStatement ifStatement, String XReturn, Hashtable<String, String> RS, Integer initialLocation, String prefix, Hashtable<Integer, Integer> breakContinueLocations, Hashtable<String, String> SL) {
 		String ifExpression = rename(ifStatement.getExpression(), RS, prefix);
 		SL.remove("PC,IC");
 		SL.remove("PC,II");
-		Transition thenTransition = new Transition(Transition.TAU, ifExpression, getSecurityAssignments(SL)
-				+ getSecurityAssignment("PC=" + ifExpression + "&&PC", "IC") + getSecurityAssignment("PC=" + ifExpression + "&&PC", "II"));
-		Transition elseTransition = new Transition(Transition.TAU, "  not (" + ifExpression + ")", getSecurityAssignments(SL) 
-				+ getSecurityAssignment("PC=" + ifExpression + "&&PC", "IC") + getSecurityAssignment("PC=" + ifExpression + "&&PC", "II"));
+		Hashtable <String, String> SLThen = (Hashtable<String, String>) SL.clone();
+		Hashtable <String, String> SLElse = (Hashtable<String, String>) SL.clone();
+		ArrayList<Expression> modifiedInElsePart = getPossibleModifiedVariables(ifStatement.getElseStatement());
+		String implicitInderentElsePart = "";
+		for (Expression expression : modifiedInElsePart) {
+			implicitInderentElsePart += rename(expression, RS, prefix) + "=" + rename(expression, RS, prefix) + "&&PC;";
+			SLThen.remove(rename(expression, RS, prefix) + ",IC");
+			SLThen.remove(rename(expression, RS, prefix) + ",II");
+		}
+		ArrayList<Expression> modifiedInThenPart = getPossibleModifiedVariables(ifStatement.getElseStatement());
+		String implicitInderentThenPart = "";
+		for (Expression expression : modifiedInThenPart) {
+			implicitInderentThenPart += rename(expression, RS, prefix) + "=" + rename(expression, RS, prefix) + "&&PC;";
+			SLElse.remove(rename(expression, RS, prefix) + ",IC");
+			SLElse.remove(rename(expression, RS, prefix) + ",II");
+		}
+		pcLevel++;
+		Transition thenTransition = new Transition(Transition.TAU, ifExpression, getSecurityAssignments(SLThen)
+				+ getSecurityAssignment("PC=" + ifExpression + "&&PC", "IC") + getSecurityAssignment("PC=" + ifExpression + "&&PC", "II")
+				+ getSecurityAssignment("PC" + pcLevel + "=PC", "IC") + getSecurityAssignment("PC" + pcLevel + "=PC", "II")
+				+ getSecurityAssignment(implicitInderentElsePart, "IC") + getSecurityAssignment(implicitInderentElsePart, "II"));
+		Transition elseTransition = new Transition(Transition.TAU, "  not (" + ifExpression + ")", getSecurityAssignments(SLElse) 
+				+ getSecurityAssignment("PC=" + ifExpression + "&&PC", "IC") + getSecurityAssignment("PC=" + ifExpression + "&&PC", "II")
+				+ getSecurityAssignment("PC" + pcLevel + "=PC", "IC") + getSecurityAssignment("PC" + pcLevel + "=PC", "II")
+				+ getSecurityAssignment(implicitInderentThenPart, "IC") + getSecurityAssignment(implicitInderentThenPart, "II"));
 		Integer thenLocation = newLocation();
 		Integer elseLocation = newLocation();
 		sts.addVertex(initialLocation);
@@ -734,28 +776,63 @@ public class STSExtractor {
 		updateStsSecurityLabelling(initialLocation, thenLocation);
 		sts.addEdge(initialLocation, elseLocation, elseTransition);
 		updateStsSecurityLabelling(initialLocation, elseLocation);
-		Integer finalThenLocation = processStatement(ifStatement.getThenStatement(), XReturn, RS, thenLocation, prefix, breakContinueLocations, SL);
+		Integer finalThenLocation = processStatement(ifStatement.getThenStatement(), XReturn, RS, thenLocation, prefix, breakContinueLocations, SLThen);
 		Integer finalLocation = finalThenLocation;
+		Integer finalElseLocation = elseLocation;
 		if(ifStatement.getElseStatement()!=null){
-			Integer finalElseLocation = processStatement(ifStatement.getElseStatement(), XReturn, RS, elseLocation, prefix, breakContinueLocations, SL);
-			Transition transition1 = new Transition(Transition.TAU, "true", getSecurityAssignments(SL));
-			Transition transition2 = new Transition(Transition.TAU, "true", getSecurityAssignments(SL));
-			finalLocation = newLocation();
-			sts.addVertex(finalLocation);
-			sts.addVertex(finalThenLocation);
-			sts.addVertex(finalElseLocation);
-			sts.addEdge(finalThenLocation, finalLocation, transition1);
-			updateStsSecurityLabelling(finalThenLocation, finalLocation);
-			sts.addEdge(finalElseLocation, finalLocation, transition2);
-			updateStsSecurityLabelling(finalElseLocation, finalLocation);
-		}else{
-			Transition transition = new Transition(Transition.TAU, "true", getSecurityAssignments(SL));
-			sts.addEdge(elseLocation, finalLocation, transition);
-			updateStsSecurityLabelling(elseLocation, finalLocation);
+			finalElseLocation = processStatement(ifStatement.getElseStatement(), XReturn, RS, elseLocation, prefix, breakContinueLocations, SLElse);
+			
 		}
+//		else{
+//			Transition transition = new Transition(Transition.TAU, "true", getSecurityAssignments(SLElse));
+//			sts.addEdge(elseLocation, finalLocation, transition);
+//			updateStsSecurityLabelling(elseLocation, finalLocation);
+//		}
+		pcLevel--;
+		String slpc = "";
+		if(pcLevel==0){
+			slpc = "LIC_PC=false;LII_PC=true;";
+		}else{
+			slpc = getSecurityAssignment("PC" + "=PC" + pcLevel, "IC") + getSecurityAssignment("PC" + "=PC" + pcLevel, "II");
+		}
+		Transition transition1 = new Transition(Transition.TAU, "true", getSecurityAssignments(SLThen) + slpc);
+		Transition transition2 = new Transition(Transition.TAU, "true", getSecurityAssignments(SLElse) + slpc);
+		finalLocation = newLocation();
+		sts.addVertex(finalLocation);
+		sts.addVertex(finalThenLocation);
+		sts.addVertex(finalElseLocation);
+		sts.addEdge(finalThenLocation, finalLocation, transition1);
+		updateStsSecurityLabelling(finalThenLocation, finalLocation);
+		sts.addEdge(finalElseLocation, finalLocation, transition2);
+		updateStsSecurityLabelling(finalElseLocation, finalLocation);
 		return finalLocation;
 	}
 	
+	static Hashtable<String, Expression> modified = new Hashtable<String, Expression>();
+	private ArrayList<Expression> getPossibleModifiedVariables(Statement statement) {
+		ArrayList<Expression> res = new ArrayList<>();
+		if(statement!=null){
+			modified.clear();
+			statement.accept(new ASTVisitor() {
+				@Override
+				public boolean visit(Assignment assignment) {
+					modified.put(assignment.getLeftHandSide().toString().replaceAll("\\s", ""), assignment.getLeftHandSide());
+					return false;
+				}
+				@Override
+				public boolean visit(VariableDeclarationStatement variableDeclarationStatement) {
+					for (Object obj : variableDeclarationStatement.fragments()) {
+						VariableDeclarationFragment variableDeclarationFragment = (VariableDeclarationFragment) obj;
+						modified.put(variableDeclarationFragment.getName().toString().replaceAll("\\s", ""), variableDeclarationFragment.getName());
+					}
+					return false;
+				}
+			});
+			res.addAll(modified.values());
+		}
+		return res;
+	}
+
 	private String getSecurityAssignments(Hashtable<String, String> SL){
 		String res = "";
 		for (String key : SL.keySet()) {
