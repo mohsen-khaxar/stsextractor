@@ -38,7 +38,7 @@ public class Transition extends DefaultEdge {
 		this.guard = guard;
 	}
 
-	public String getUpadater() {
+	public String getUpdater() {
 		return upadater;
 	}
 

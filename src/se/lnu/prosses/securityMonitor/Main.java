@@ -14,24 +14,20 @@ public class Main {
 //		includingFilter.add("java\\.sql.*");
 //		includingFilter.add("javax\\.servlet.*");
 		ArrayList<String> entryPoints = new ArrayList<>();
-//		entryPoints.add(".*\\.mohsen");
-//		entryPoints.add(".*\\.doGet");
-//		entryPoints.add(".*\\.doPost");
-		entryPoints.add(".*\\.f");
 		ArrayList<String> excludingFilter = new ArrayList<>();
 		Set<String> controllableMethodNames = new HashSet<>();
-//		controllableMethodNames .add("se.lnu.Users.removeUser");
-//		controllableMethodNames.add("se.lnu.User.getFriendAt");
-//		controllableMethodNames.add("se.lnu.EstimateLocation.getDistance");
-//		controllableMethodNames.add("se.lnu.EstimateLocation.estimatLocation");
-//		controllableMethodNames.add("se.lnu.Users.findUserById");
-//		controllableMethodNames.add("se.lnu.Users.addUser");
-//		controllableMethodNames.add("se.lnu.Users.addFriend");
-//		controllableMethodNames.add("se.lnu.Users.auth");
+
+//		entryPoints.add(".*\\.getStrangerInformation");
+//		controllableMethodNames.add("se.lnu.User.getStrangerInformation");
+//		controllableMethodNames.add("se.lnu.User.estimatLocation");
+
+		entryPoints.add(".*\\.f");
 		controllableMethodNames.add("se.lnu.Test.g");
-//		controllableMethodNames.add("se.lnu.Test.f");
+		
 		STSExtractor stsExtractor = new STSExtractor(includingFilter, excludingFilter , entryPoints, controllableMethodNames);
 		stsExtractor.extract(directoryPath, classPath, controllableMethodNames);
+		stsExtractor.sts.saveAsDot(directoryPath + File.separator + "model1.dot");
+		stsExtractor.sts.propagateInitialValues();
 		stsExtractor.sts.saveAsDot(directoryPath + File.separator + "model.dot");
 		STS controlledSTS = stsExtractor.generateControlledSTS();
 		controlledSTS.saveAsDot("/home/mohsen/aspects/modelc.dot");

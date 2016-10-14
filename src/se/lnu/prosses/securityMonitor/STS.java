@@ -8,8 +8,10 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Hashtable;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.Queue;
 import java.util.Set;
 
 import org.eclipse.jdt.core.dom.CompilationUnit;
@@ -89,7 +91,7 @@ public class STS extends AbstractBaseGraph<Integer, Transition> implements Direc
 				if(transition.getEvent().equals(controllableMethodName.replaceAll("\\.", "_")) && this.getEdgeSource(transition)>=0){
 					check = true;
 					fileWriter.write("if(currentLocation==" + this.getEdgeSource(transition) + " && " + 
-					convertToJavaSyntax(transition.getGuard(), methodDeclaration.parameters(), getArgumentParameterMap(transition.getUpadater())) + "){\n");
+					convertToJavaSyntax(transition.getGuard(), methodDeclaration.parameters(), getArgumentParameterMap(transition.getUpdater())) + "){\n");
 					if(this.getEdgeTarget(transition)==0){
 						fileWriter.write("\tMonitorHelper.removeMonitorInstanceId(monitorInstanceId);\n");
 					}else if(this.getEdgeTarget(transition)<0){
@@ -109,7 +111,7 @@ public class STS extends AbstractBaseGraph<Integer, Transition> implements Direc
 				if(transition.getEvent().equals(controllableMethodName.replaceAll("\\.", "_")) && this.getEdgeSource(transition)<0){
 					check = true;
 					fileWriter.write("if(currentLocation==" + this.getEdgeSource(transition) + " && " + 
-					convertToJavaSyntax(transition.getGuard(), methodDeclaration.parameters(), getArgumentParameterMap(transition.getUpadater())) + "){\n");
+					convertToJavaSyntax(transition.getGuard(), methodDeclaration.parameters(), getArgumentParameterMap(transition.getUpdater())) + "){\n");
 					if(this.getEdgeTarget(transition)==0){
 						fileWriter.write("\tMonitorHelper.removeMonitorInstanceId(monitorInstanceId);\n");
 					}else {
@@ -157,9 +159,6 @@ public class STS extends AbstractBaseGraph<Integer, Transition> implements Direc
 		return res;
 	}
 
-	public static void main(String[] args) {
-	}
-	
 	private String convertToJavaSyntax(String guard, List<SingleVariableDeclaration> parameters, Map<String, String> argumentParameterMap) {
 		guard = guard.replaceAll("=", " == ");
 		guard = guard.replaceAll("<>", " != ");
@@ -235,6 +234,134 @@ public class STS extends AbstractBaseGraph<Integer, Transition> implements Direc
 		return classes;
 	}
 	
+	public void propagateInitialValues(){
+		Queue<Integer> queue = new LinkedList<>();
+		for (Transition transition : this.outgoingEdgesOf(0)) {
+			queue.add(this.getEdgeTarget(transition));
+		}
+		ArrayList<Integer> visited = new ArrayList<>();
+		while(!queue.isEmpty()){
+			Integer location = queue.poll();
+			if(location==5){
+				System.out.println(location);
+			}
+			Hashtable<String, String> initialValues = getInitialValues(this.incomingEdgesOf(location));
+			for (Transition transition : this.outgoingEdgesOf(location)) {
+				String updater = transition.getUpdater().replaceAll("==", "#");
+				String newUpdater = updater.replaceAll("\\s*=", "=");
+				for (String variable : initialValues.keySet()) {
+					if(!newUpdater.contains(variable+"=")){
+						newUpdater = variable + "=" + initialValues.get(variable) + ";" + newUpdater;  
+					}
+				}
+				newUpdater = propagateInitialValuesAcrossUpdater(newUpdater);
+//				if(/*variable.equals("LXI_se_lnu_User_getStrangerInformation___X0")*/newUpdater.matches(".*false\\s*=.*")){
+//					System.out.println(newUpdater);
+//				}
+				transition.setUpadater(newUpdater.replaceAll("#", "=="));
+				if(this.getEdgeTarget(transition)!=0 && (!visited.contains(this.getEdgeTarget(transition))
+						|| !newUpdater.replaceAll("\\s", "").equals(updater.replaceAll("\\s", "")))){
+					queue.add(this.getEdgeTarget(transition));
+				}
+			}
+			visited.add(location);
+		}
+	}
+	
+	private String propagateInitialValuesAcrossUpdater(String updater) {
+		if(!updater.matches("\\s*")){
+			String[] parts = updater.split(";");
+			for (int i=0; i<parts.length; i++) {
+				if(!parts[i].matches("\\s*")){
+					String left = parts[i].split("=")[0].replaceAll("\\s", "");
+					String right = parts[i].split("=")[1];
+					if(right.matches("\\s*(true|false|[-+]?\\d*\\.?\\d+)\\s*")){
+						for (int j = i+1; j < parts.length; j++) {
+							String left2 = parts[j].split("=")[0].replaceAll("\\s", "");
+							String right2 = parts[j].split("=")[1];
+							if(!left.equals(left2)||(" "+right2+" ").matches(".*\\W"+left+"\\W.*")){
+								parts[j] = parts[j].split("=")[0] + "=" + replace(parts[j].split("=")[1], left, right);
+							}else{
+								parts[i] = "";
+								break;
+							}
+						}
+					}
+				}
+			}
+			updater = "";
+			for (String part : parts) {
+				if(!part.matches("\\s*")){
+					updater += part + ";";
+				}
+			}
+		}
+		return updater;		
+	}
+
+	private String replace(String string, String left, String right) {
+		String[] parts = ("@"+string+"@").split(left);
+		String res = "";
+		for (int i=0;i<parts.length-1;i++) {
+			if(!Character.isJavaIdentifierPart(parts[i].charAt(parts[i].length()-1))
+					&& !Character.isJavaIdentifierPart(parts[i+1].charAt(0))){
+				res += parts[i] + right;
+			}else{
+				res += parts[i] + left;
+			}
+		}
+		res += parts[parts.length-1];
+		res = res.replaceAll("@", "");
+		return res;
+	}
+	
+	public static void main(String[] args) {
+		String res =new STS(new HashSet<>()).propagateInitialValuesAcrossUpdater("a=1;b=a;a=b;");
+		System.out.println(res);
+	}
+	
+	private Hashtable<String, String> getInitialValues(Set<Transition> transitions) {
+		Hashtable<String, String> res = new Hashtable<>();
+		boolean first = true;
+		for (Transition transition : transitions) {
+			String[] parts = transition.getUpdater().split(";");
+			ArrayList<String> variables = new ArrayList<>();
+			for (String part : parts) {
+				part = part.replaceAll("\\s", "");
+				variables.add(part.split("=")[0]);
+				if(!part.equals("")){
+					if(part.split("=")[1].matches("\\s*(true|false|[-+]?\\d*\\.?\\d+)\\s*")){
+						if(res.get(part.split("=")[0])==null){
+							if(first){
+								res.put(part.split("=")[0], part.split("=")[1]);
+							}else{
+								res.put(part.split("=")[0], "V");
+							}
+						}else if(!res.get(part.split("=")[0]).equals(part.split("=")[1])){
+							res.put(part.split("=")[0], "V");
+						}
+					}else{
+						res.put(part.split("=")[0], "V");
+					}
+				}
+			}
+			for (String variable : res.keySet()) {
+				if(!variables.contains(variable)){
+					res.put(variable, "V");
+				}
+			}
+			first = false;
+		}
+		ArrayList<String> keys = new ArrayList<>();
+		keys.addAll(res.keySet());
+		for (String key : keys) {
+			if(res.get(key).equals("V")){
+				res.remove(key);
+			}
+		}
+		return res;
+	}
+
 	public STS convertToUncontrollableFreeSTS(){
 		STS sts = (STS) this.clone();
 		Transition transition = nextUncontrollable(sts);
@@ -289,8 +416,10 @@ public class STS extends AbstractBaseGraph<Integer, Transition> implements Direc
 			Integer source = sts.getEdgeSource(transition);
 			Integer target = sts.getEdgeTarget(transition);
 			if(transition.getEvent().equals(Transition.PARAMETER)){
-				updater = transition.getUpadater().replaceAll("L(XC|IC|XI|II)_", "@@");
-				updater = updater.substring(0, updater.indexOf("@@"));
+				if(!transition.getUpdater().matches("\\s*")){
+					updater = transition.getUpdater().replaceAll("L(XC|IC|XI|II)_", "@@");
+					updater = updater.substring(0, updater.indexOf("@@"));
+				}				
 				Set<Transition> outgoingTransitions = new HashSet<>();
 				outgoingTransitions.addAll(sts.outgoingEdgesOf(target));
 				for (Transition transition2 : outgoingTransitions) {
@@ -325,7 +454,7 @@ public class STS extends AbstractBaseGraph<Integer, Transition> implements Direc
 			}
 			String guard = guard1 + " and " + guard2;
 			guard = guard.replaceAll("\\s?true\\s?and\\s?", " ").replaceAll("\\s?and\\s?true\\s?", " ").replaceAll("\\s+", " ");
-			String updater = incomingTransition.getUpadater() + outgoingTransition.getUpadater();
+			String updater = incomingTransition.getUpdater() + outgoingTransition.getUpdater();
 			Transition newTransition = new Transition(incomingTransition.getEvent(), guard, updater);
 			sts.addEdge(sts.getEdgeSource(incomingTransition), sts.getEdgeTarget(outgoingTransition), newTransition);
 		}
@@ -356,7 +485,7 @@ public class STS extends AbstractBaseGraph<Integer, Transition> implements Direc
 	}
 
 	private String getControllableTransitionUpdater(Transition transition) {
-		String res = transition.getUpadater();
+		String res = transition.getUpdater();
 //		if(controllableEvents.contains(transition.getEvent())){
 //			String[] parts = transition.getUpadater().split(";");
 //			for (String part : parts) {
@@ -434,8 +563,8 @@ public class STS extends AbstractBaseGraph<Integer, Transition> implements Direc
 			Set<Transition> outgoingEdges = this.outgoingEdgesOf(vertex);
 			for (Transition transition : outgoingEdges) {
 				List<Expression> updater = new ArrayList<>();
-				if(!transition.getUpadater().replaceAll(" ", "").equals("")){
-					String[] parts = transition.getUpadater().split(",");
+				if(!transition.getUpdater().replaceAll(" ", "").equals("")){
+					String[] parts = transition.getUpdater().split(",");
 					for (String part : parts) {
 						String[] assignmentParts = part.split("=");
 						String righthand = "";
@@ -498,8 +627,8 @@ public class STS extends AbstractBaseGraph<Integer, Transition> implements Direc
 			events.add(transition.getEvent());
 			transitionFunctions.put("LOC", transitionFunctions.get("LOC") + "else if " + transition.getEvent() + " and LOC="	+ this.getEdgeSource(transition) 
 			+ " and (" + convertToSTSSyntax(transition.getGuard()) + ")" + " then " + this.getEdgeTarget(transition) + " \n");
-			if(!transition.getUpadater().equals("")){
-				String[] updaterParts = transition.getUpadater().split(";");
+			if(!transition.getUpdater().equals("")){
+				String[] updaterParts = transition.getUpdater().split(";");
 				for (String updaterPart : updaterParts) {
 					String leftHandSide = "";
 					try{
@@ -563,8 +692,8 @@ public class STS extends AbstractBaseGraph<Integer, Transition> implements Direc
 		separator = "";
 		String[] SLPrefixes = {"LXC_", "LXI_", "LIC_", "LII_"};
 		for (Transition transition : this.edgeSet()) {
-			if(!transition.getUpadater().equals("")){
-				String[] upadaterParts = transition.getUpadater().split(";");
+			if(!transition.getUpdater().equals("")){
+				String[] upadaterParts = transition.getUpdater().split(";");
 				for (String upadaterPart : upadaterParts) {
 					if(!upadaterPart.split("=")[0].startsWith("LXC_")
 							&& !upadaterPart.split("=")[0].startsWith("LXI_")
