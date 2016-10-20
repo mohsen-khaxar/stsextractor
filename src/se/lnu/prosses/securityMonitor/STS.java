@@ -247,7 +247,7 @@ public class STS extends AbstractBaseGraph<Integer, Transition> implements Direc
 			}
 			Hashtable<String, String> initialValues = getInitialValues(this.incomingEdgesOf(location));
 			for (Transition transition : this.outgoingEdgesOf(location)) {
-				String updater = transition.getUpdater().replaceAll("==", "#");
+				String updater = transition.getUpdater().replaceAll("==", "#").replaceAll("!=", "<");
 				String newUpdater = updater.replaceAll("\\s*=", "=");
 				for (String variable : initialValues.keySet()) {
 					if(!newUpdater.contains(variable+"=")){
@@ -258,7 +258,7 @@ public class STS extends AbstractBaseGraph<Integer, Transition> implements Direc
 //				if(/*variable.equals("LXI_se_lnu_User_getStrangerInformation___X0")*/newUpdater.matches(".*false\\s*=.*")){
 //					System.out.println(newUpdater);
 //				}
-				transition.setUpadater(newUpdater.replaceAll("#", "=="));
+				transition.setUpadater(newUpdater.replaceAll("#", "==").replaceAll("<", "!="));
 				if(this.getEdgeTarget(transition)!=0 && (!visited.contains(this.getEdgeTarget(transition))
 						|| !newUpdater.replaceAll("\\s", "").equals(updater.replaceAll("\\s", "")))){
 					queue.add(this.getEdgeTarget(transition));
@@ -688,8 +688,8 @@ public class STS extends AbstractBaseGraph<Integer, Transition> implements Direc
 			}
 		}
 		String initialSection = "!initial\nLOC=" + minLocation + ";\n\n";
-		String invariantSection = "!invariant\n";
-		separator = "";
+		String invariantSection = "!invariant\ntrue";
+		separator = " and ";
 		String[] SLPrefixes = {"LXC_", "LXI_", "LIC_", "LII_"};
 		for (Transition transition : this.edgeSet()) {
 			if(!transition.getUpdater().equals("")){
@@ -703,7 +703,9 @@ public class STS extends AbstractBaseGraph<Integer, Transition> implements Direc
 							if(securityLabelling.get(this.getEdgeTarget(transition))!=null){
 								String[] securityLabellingParts = securityLabelling.get(this.getEdgeTarget(transition)).split(";");
 								for (String securityLabellingPart : securityLabellingParts) {
-									if(securityLabellingPart.replaceAll(" ", "").startsWith(SLPrefix+upadaterPart.split("=")[0].replaceAll(" ", ""))){
+									securityLabellingPart = securityLabellingPart.replaceAll(" ", "");
+									if((securityLabellingPart.matches("(LXC_|LIC_).*=false") || securityLabellingPart.matches("(LXI_|LII_).*=true")) &&
+											securityLabellingPart.startsWith(SLPrefix+upadaterPart.split("=")[0].replaceAll(" ", ""))){
 										invariantSection += separator + "(LOC<>" + this.getEdgeTarget(transition) + " or " + securityLabellingPart + ")";
 										separator = " and ";
 									}

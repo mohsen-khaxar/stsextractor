@@ -113,7 +113,7 @@ public class STSExtractor {
 					String[] andParts = orPart.split("and");
 					String[] locations = null;
 					for (String andPart : andParts) {
-						if(andPart.matches("\\s*LOC\\s*in.*")){
+						if(andPart.matches("\\s*LOC\\s*(in|=).*")){
 							andPart = andPart.replaceAll("[^\\d,]", "");
 							locations = andPart.split(",");
 							break;
@@ -156,16 +156,18 @@ public class STSExtractor {
 					if(guard.equals("")){
 						guard = "false";
 					}
-					transition.setGuard(guard);
-					Transition insecureTransition = new Transition(transition.getEvent(), " not (" + guard.replaceAll("\\s+", " ") + ")", transition.upadater);
-					if(!res.vertexSet().contains(-res.getEdgeTarget(transition))){
-						res.addVertex(-res.getEdgeTarget(transition));
+					if(!guard.matches("(true|\\sand\\s|\\sor\\s|\\s)*")){
+						transition.setGuard(guard);
+						Transition insecureTransition = new Transition(transition.getEvent(), " not (" + guard.replaceAll("\\s+", " ") + ")", transition.upadater);
+						if(!res.vertexSet().contains(-res.getEdgeTarget(transition))){
+							res.addVertex(-res.getEdgeTarget(transition));
+						}
+						res.addEdge(res.getEdgeSource(transition), -res.getEdgeTarget(transition), insecureTransition);
+						Transition returnTransition = new Transition(Transition.RETURN, "true", "");
+						res.addEdge(-res.getEdgeTarget(transition), res.getEdgeTarget(transition), returnTransition);
+						
+						((Transition)(res.incomingEdgesOf(res.getEdgeSource(transition)).toArray()[0])).setEvent(Transition.PARAMETER);
 					}
-					res.addEdge(res.getEdgeSource(transition), -res.getEdgeTarget(transition), insecureTransition);
-					Transition returnTransition = new Transition(Transition.RETURN, "true", "");
-					res.addEdge(-res.getEdgeTarget(transition), res.getEdgeTarget(transition), returnTransition);
-					
-					((Transition)(res.incomingEdgesOf(res.getEdgeSource(transition)).toArray()[0])).setEvent(Transition.PARAMETER);
 				}
 			}
 		}
@@ -585,7 +587,7 @@ public class STSExtractor {
 	}
 	
 	private Integer processStatement(Statement statement, String XReturn, Hashtable<String, String> RS, Integer initialLocation, String prefix, Hashtable<Integer, Integer> breakContinueLocations, Hashtable<String, String> SL) {
-		if(initialLocation==2){
+		if(initialLocation==59){
 			System.out.println(statement);
 		}
 		Integer finalLocation = initialLocation; 
