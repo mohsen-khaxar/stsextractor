@@ -108,12 +108,12 @@ public class STSExtractor {
 		for (String part : parts) {
 			if(!part.replaceAll("\\s", "").equals("")){
 				String event = part.substring(0, part.indexOf("=")).replaceAll("['\\s]", "");
-				String[] orParts = part.substring(part.indexOf("=")+1, part.length()).split("or");
+				String[] orParts = part.substring(part.indexOf("=")+1, part.length()).split("\\sor\\s");
 				for (String orPart : orParts) {
-					String[] andParts = orPart.split("and");
+					String[] andParts = orPart.split("\\sand\\s");
 					String[] locations = null;
 					for (String andPart : andParts) {
-						if(andPart.matches("\\s*LOC\\s*(in|=).*")){
+						if(andPart.contains(" LOC ")){
 							andPart = andPart.replaceAll("[^\\d,]", "");
 							locations = andPart.split(",");
 							break;

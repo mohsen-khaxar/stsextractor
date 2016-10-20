@@ -17,12 +17,12 @@ public class Main {
 		ArrayList<String> excludingFilter = new ArrayList<>();
 		Set<String> controllableMethodNames = new HashSet<>();
 
-//		entryPoints.add(".*\\.getStrangerInformation");
-//		controllableMethodNames.add("se.lnu.User.getStrangerInformation");
-//		controllableMethodNames.add("se.lnu.User.estimatLocation");
+		entryPoints.add(".*\\.getStrangerInformation");
+		controllableMethodNames.add("se.lnu.User.getStrangerInformation");
+		controllableMethodNames.add("se.lnu.User.estimatLocation");
 
-		entryPoints.add(".*\\.f");
-		controllableMethodNames.add("se.lnu.Test.g");
+//		entryPoints.add(".*\\.f");
+//		controllableMethodNames.add("se.lnu.Test.g");
 		
 		STSExtractor stsExtractor = new STSExtractor(includingFilter, excludingFilter , entryPoints, controllableMethodNames);
 		stsExtractor.extract(directoryPath, classPath, controllableMethodNames);
