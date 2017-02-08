@@ -10,23 +10,17 @@ public class Main {
 		String directoryPath = "/home/mohsen/git/runningexample//src";
 		String[] classPath = new String[]{"/home/mohsen/servlet-api.jar", "/home/mohsen/git/stsextractor/src"};
 		ArrayList<String> includingFilter = new ArrayList<String>();
-		includingFilter.add("se\\.lnu.*");
-//		includingFilter.add("java\\.sql.*");
-//		includingFilter.add("javax\\.servlet.*");
 		ArrayList<String> entryPoints = new ArrayList<>();
 		ArrayList<String> excludingFilter = new ArrayList<>();
 		Set<String> controllableMethodNames = new HashSet<>();
 
+		includingFilter.add("se\\.lnu.*");
 		entryPoints.add(".*\\.getStrangerInformation");
 		controllableMethodNames.add("se.lnu.User.getStrangerInformation");
 		controllableMethodNames.add("se.lnu.User.estimatLocation");
 
-//		entryPoints.add(".*\\.f");
-//		controllableMethodNames.add("se.lnu.Test.g");
-		
 		STSExtractor stsExtractor = new STSExtractor(includingFilter, excludingFilter , entryPoints, controllableMethodNames);
 		stsExtractor.extract(directoryPath, classPath, controllableMethodNames);
-		stsExtractor.sts.saveAsDot(directoryPath + File.separator + "model1.dot");
 		stsExtractor.sts.propagateInitialValues();
 		stsExtractor.sts.saveAsDot(directoryPath + File.separator + "model.dot");
 		STS controlledSTS = stsExtractor.generateControlledSTS();
