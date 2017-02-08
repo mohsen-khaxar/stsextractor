@@ -24,14 +24,14 @@ import org.jgrapht.ext.DOTExporter;
 import org.jgrapht.ext.EdgeNameProvider;
 import org.jgrapht.ext.VertexNameProvider;
 import org.jgrapht.graph.AbstractBaseGraph;
-import org.project.automaton.Automaton;
-import org.project.automaton.Edge;
-import org.project.automaton.Event;
-import org.project.automaton.Event.EventType;
-import org.project.automaton.Expression;
-import org.project.automaton.State;
-import org.project.automaton.Variable;
-import org.project.automaton.Variable.VariableType;
+//import org.project.automaton.Automaton;
+//import org.project.automaton.Edge;
+//import org.project.automaton.Event;
+//import org.project.automaton.Event.EventType;
+//import org.project.automaton.Expression;
+//import org.project.automaton.State;
+//import org.project.automaton.Variable;
+//import org.project.automaton.Variable.VariableType;
 
 @SuppressWarnings("serial")
 public class STS extends AbstractBaseGraph<Integer, Transition> implements DirectedGraph<Integer, Transition>{
@@ -553,58 +553,58 @@ public class STS extends AbstractBaseGraph<Integer, Transition> implements Direc
 		writer.close();
 	}
 	
-	public Automaton convertToAutomaton(){
-		List<Event> events = new ArrayList<>();
-		List<Variable> vars = new ArrayList<>();
-		List<State> states = new ArrayList<>();
-		Set<String> eventNames = new HashSet<>();
-		for (Integer vertex : this.vertexSet()) {
-			List<Edge> edges = new ArrayList<>();
-			Set<Transition> outgoingEdges = this.outgoingEdgesOf(vertex);
-			for (Transition transition : outgoingEdges) {
-				List<Expression> updater = new ArrayList<>();
-				if(!transition.getUpdater().replaceAll(" ", "").equals("")){
-					String[] parts = transition.getUpdater().split(",");
-					for (String part : parts) {
-						String[] assignmentParts = part.split("=");
-						String righthand = "";
-						String separator = "";
-						for (int i=1; i<assignmentParts.length; i++) {
-							righthand += separator + assignmentParts[i];
-							separator = "=";
-						}
-						Expression expression = new Expression();
-						expression.setVariable(assignmentParts[0].replaceAll(" ", ""));
-						expression.setValue(righthand);
-						updater.add(expression);
-					}
-				}
-				edges.add(new Edge(String.valueOf(this.getEdgeTarget(transition)), convertToSTSSyntax(transition.getGuard()), transition.getEvent(), updater));
-				eventNames.add(transition.getEvent());
-			}
-			State state = new State(String.valueOf(vertex), edges);
-			states.add(state);
-		}
-		for (String eventName : eventNames) {
-			events.add(new Event(EventType.C, eventName));
-		}
-		for (String variable : variables) {
-			String[] variableParts = variable.split(",");
-			VariableType type;
-			if(variableParts[0].equals("int")){
-				type = VariableType.INT;
-			} else if(variableParts[0].equals("real")){
-				type = VariableType.FLOAT;
-			} else if(variableParts[0].equals("bool")){
-				type = VariableType.BOOLEAN;
-			} else{
-				type = VariableType.UNDEFINED;
-			}
-			vars.add(new Variable(type , variableParts[1]));
-		}
-		Automaton automaton = new Automaton("CaseStudy", events, vars, states);
-		return automaton;
-	}
+//	public Automaton convertToAutomaton(){
+//		List<Event> events = new ArrayList<>();
+//		List<Variable> vars = new ArrayList<>();
+//		List<State> states = new ArrayList<>();
+//		Set<String> eventNames = new HashSet<>();
+//		for (Integer vertex : this.vertexSet()) {
+//			List<Edge> edges = new ArrayList<>();
+//			Set<Transition> outgoingEdges = this.outgoingEdgesOf(vertex);
+//			for (Transition transition : outgoingEdges) {
+//				List<Expression> updater = new ArrayList<>();
+//				if(!transition.getUpdater().replaceAll(" ", "").equals("")){
+//					String[] parts = transition.getUpdater().split(",");
+//					for (String part : parts) {
+//						String[] assignmentParts = part.split("=");
+//						String righthand = "";
+//						String separator = "";
+//						for (int i=1; i<assignmentParts.length; i++) {
+//							righthand += separator + assignmentParts[i];
+//							separator = "=";
+//						}
+//						Expression expression = new Expression();
+//						expression.setVariable(assignmentParts[0].replaceAll(" ", ""));
+//						expression.setValue(righthand);
+//						updater.add(expression);
+//					}
+//				}
+//				edges.add(new Edge(String.valueOf(this.getEdgeTarget(transition)), convertToSTSSyntax(transition.getGuard()), transition.getEvent(), updater));
+//				eventNames.add(transition.getEvent());
+//			}
+//			State state = new State(String.valueOf(vertex), edges);
+//			states.add(state);
+//		}
+//		for (String eventName : eventNames) {
+//			events.add(new Event(EventType.C, eventName));
+//		}
+//		for (String variable : variables) {
+//			String[] variableParts = variable.split(",");
+//			VariableType type;
+//			if(variableParts[0].equals("int")){
+//				type = VariableType.INT;
+//			} else if(variableParts[0].equals("real")){
+//				type = VariableType.FLOAT;
+//			} else if(variableParts[0].equals("bool")){
+//				type = VariableType.BOOLEAN;
+//			} else{
+//				type = VariableType.UNDEFINED;
+//			}
+//			vars.add(new Variable(type , variableParts[1]));
+//		}
+//		Automaton automaton = new Automaton("CaseStudy", events, vars, states);
+//		return automaton;
+//	}
 
 	private String convertToSTSSyntax(String guard) {
 		guard = guard.replaceAll("==", "=");

@@ -40,7 +40,7 @@ import org.eclipse.jdt.core.dom.TypeDeclaration;
 import org.eclipse.jdt.core.dom.VariableDeclarationFragment;
 import org.eclipse.jdt.core.dom.VariableDeclarationStatement;
 import org.eclipse.jdt.core.dom.WhileStatement;
-import org.project.automaton.Automaton;
+//import org.project.automaton.Automaton;
 
 public class STSExtractor {
 	int newLocation = 1;
@@ -67,9 +67,9 @@ public class STSExtractor {
 		sts.variables.add("bool,LII_PC");
 	}
 	
-	public Automaton convertToAutomaton(){
-		return sts.convertToAutomaton();
-	}
+//	public Automaton convertToAutomaton(){
+//		return sts.convertToAutomaton();
+//	}
 	
 	public String convertToReax(){
 		return sts.convertToReax();
