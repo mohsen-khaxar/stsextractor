@@ -7,8 +7,8 @@ import java.util.Set;
 
 public class Main {
 	public static void main(String[] args) throws Exception {
-		String directoryPath = "/home/mohsen/git/runningexample//src";
-		String[] classPath = new String[]{"/home/mohsen/servlet-api.jar", "/home/mohsen/git/stsextractor/src"};
+		String directoryPath = "~/runningexample/src";
+		String[] classPath = new String[]{"~/runningexample/src"};
 		ArrayList<String> includingFilter = new ArrayList<String>();
 		ArrayList<String> entryPoints = new ArrayList<>();
 		ArrayList<String> excludingFilter = new ArrayList<>();
@@ -24,9 +24,9 @@ public class Main {
 		stsExtractor.sts.propagateInitialValues();
 		stsExtractor.sts.saveAsDot(directoryPath + File.separator + "model.dot");
 		STS controlledSTS = stsExtractor.generateControlledSTS();
-		controlledSTS.saveAsDot("/home/mohsen/aspects/modelc.dot");
+		controlledSTS.saveAsDot("~/runningexample/aspects/modelc.dot");
 		controlledSTS = controlledSTS.convertToUncontrollableFreeSTS();
-		controlledSTS.saveAsDot("/home/mohsen/aspects/freemodelc.dot");
-		controlledSTS.generateAspect(directoryPath, "/home/mohsen/aspects");
+		controlledSTS.saveAsDot("~/runningexample/aspects/freemodelc.dot");
+		controlledSTS.generateAspect(directoryPath, "~/runningexample/aspects");
 	}
 }
