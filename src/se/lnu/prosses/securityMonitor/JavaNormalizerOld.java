@@ -2,8 +2,11 @@ package se.lnu.prosses.securityMonitor;
 
 import java.io.File;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+
 import org.eclipse.jdt.core.JavaCore;
 import org.eclipse.jdt.core.dom.AST;
 import org.eclipse.jdt.core.dom.ASTNode;
@@ -19,6 +22,7 @@ import org.eclipse.jdt.core.dom.ExpressionStatement;
 import org.eclipse.jdt.core.dom.ForStatement;
 import org.eclipse.jdt.core.dom.IfStatement;
 import org.eclipse.jdt.core.dom.InfixExpression;
+import org.eclipse.jdt.core.dom.LineComment;
 import org.eclipse.jdt.core.dom.MethodDeclaration;
 import org.eclipse.jdt.core.dom.MethodInvocation;
 import org.eclipse.jdt.core.dom.ParenthesizedExpression;
@@ -36,13 +40,44 @@ import org.eclipse.jface.text.Document;
 import org.eclipse.text.edits.TextEdit;
 import se.lnu.prosses.securityMonitor.Utils;
 
-public class JavaNormalizer {
+class CommentVisitor extends ASTVisitor {
+	CompilationUnit cu;
+	String source;
+ 
+	public CommentVisitor(CompilationUnit cu, String source) {
+		super();
+		this.cu = cu;
+		this.source = source;
+	}
+ 
+	public boolean visit(LineComment node) {
+		int start = node.getStartPosition();
+		int end = start + node.getLength();
+		String comment = source.substring(start, end);
+		System.out.println(comment);
+		return true;
+	}
+ 
+ 
+}
 
+public class JavaNormalizerOld {
+	
+	
+	public static void main(final String[] args) {
+		Set<String> test = new HashSet<>();
+		test.add("ali");
+		test.add("ali");
+		test.add("ali1");
+		System.out.println(test);
+		
+	}
+	
+	
 	int variableCounter = 0;
 	
 	public void normalize(String[] sourceDir, String[] classPath, String javaFilePath) throws Exception {
 		CompilationUnit compilationUnit = getCompilationUnit(sourceDir, classPath, javaFilePath);
-		CommentProcessor.process(javaFilePath);
 		Document document = new Document(String.valueOf(Utils.readTextFile(javaFilePath)));
 		AST ast = compilationUnit.getAST();
 		ASTRewrite astRewrite = ASTRewrite.create(ast);
@@ -65,7 +100,6 @@ public class JavaNormalizer {
 		new File(javaFilePath + ".normalized").renameTo(new File(javaFilePath));
 	}
 	
-
 	private CompilationUnit getCompilationUnit(String[] sourceDir, String[] classPath, String javaFilePath) {
 		ASTParser parser = ASTParser.newParser(AST.JLS4);
 		parser.setResolveBindings(true);
