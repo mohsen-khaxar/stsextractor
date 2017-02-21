@@ -43,7 +43,7 @@ import org.eclipse.jdt.core.dom.WhileStatement;
 //import org.project.automaton.Automaton;
 
 public class STSExtractor {
-	int newLocation = 1;
+	int newLocation = 2;
 	int pcLevel = 0;
 	int maxPcLevel = 0;
 	Hashtable<Integer, Integer> blocks;
@@ -63,6 +63,9 @@ public class STSExtractor {
 		sts.addVertex(0);
 		sts.addVertex(1);
 		sts.addEdge(0, 1, transition);
+		sts.addVertex(2);
+		transition =  new Transition(Transition.TAU, "true", "");
+		sts.addEdge(2, 2, transition);
 		sts.variables.add("bool,LIC_PC");
 		sts.variables.add("bool,LII_PC");
 	}
@@ -559,7 +562,7 @@ public class STSExtractor {
 			if (matched && methodDeclaration.getBody() != null	&& (methodModifier.contains("public") || methodModifier.contains("protected"))) {
 				Integer finalLocation = processMethod(methodDeclaration);
 				Transition transition = new Transition(Transition.TAU, "true", "");
-				sts.addEdge(finalLocation, 0, transition);
+				sts.addEdge(finalLocation, 2, transition);
 			}
 		}
 	}
@@ -1129,19 +1132,23 @@ public class STSExtractor {
 		}else{
 			slpc = getSecurityAssignment("PC" + "=PC" + pcLevel, "IC") + getSecurityAssignment("PC" + "=PC" + pcLevel, "II");
 		}
-		Transition transition1 = new Transition(Transition.TAU, "true", getSecurityAssignments(SL) + slpc);
 //		Transition transition2 = new Transition(Transition.TAU, "true", "");
-		Transition transition2 = new Transition(Transition.TAU, "true", getSecurityAssignments(SL) + slpc);
 //		Integer preFinalElseLocation = newLocation();
 		finalLocation = newLocation();
 		sts.addVertex(finalLocation);
-		sts.addVertex(finalThenLocation);
+//		sts.addVertex(finalThenLocation);
 //		sts.addVertex(preFinalElseLocation);
 		sts.addVertex(finalElseLocation);
-		sts.addEdge(finalThenLocation, finalLocation, transition1);
-		updateStsSecurityLabelling(finalThenLocation, finalLocation);
-		sts.addEdge(finalElseLocation, finalLocation, transition2);
-		updateStsSecurityLabelling(finalElseLocation, finalLocation);
+		if(!breakContinueLocations.containsKey(finalThenLocation)){
+			Transition transition1 = new Transition(Transition.TAU, "true", getSecurityAssignments(SL) + slpc);
+			sts.addEdge(finalThenLocation, finalLocation, transition1);
+			updateStsSecurityLabelling(finalThenLocation, finalLocation);
+		}
+		if(!breakContinueLocations.containsKey(finalElseLocation)){
+			Transition transition2 = new Transition(Transition.TAU, "true", getSecurityAssignments(SL) + slpc);
+			sts.addEdge(finalElseLocation, finalLocation, transition2);
+			updateStsSecurityLabelling(finalElseLocation, finalLocation);
+		}
 //		sts.addEdge(preFinalElseLocation, finalLocation, transition3);
 //		updateStsSecurityLabelling(preFinalElseLocation, finalLocation);
 		blocks.put(blockEnterLocation, finalLocation);

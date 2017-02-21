@@ -5,7 +5,10 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Scanner;
 import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import org.eclipse.jdt.core.JavaCore;
 import org.eclipse.jdt.core.dom.AST;
@@ -40,27 +43,6 @@ import org.eclipse.jface.text.Document;
 import org.eclipse.text.edits.TextEdit;
 import se.lnu.prosses.securityMonitor.Utils;
 
-class CommentVisitor extends ASTVisitor {
-	CompilationUnit cu;
-	String source;
- 
-	public CommentVisitor(CompilationUnit cu, String source) {
-		super();
-		this.cu = cu;
-		this.source = source;
-	}
- 
-	public boolean visit(LineComment node) {
-		int start = node.getStartPosition();
-		int end = start + node.getLength();
-		String comment = source.substring(start, end);
-		System.out.println(comment);
-		return true;
-	}
- 
- 
-}
-
 public class JavaNormalizer {
 	
 	
@@ -73,11 +55,11 @@ public class JavaNormalizer {
 		
 	}
 	
-	
 	int variableCounter = 0;
 	
 	public void normalize(String[] sourceDir, String[] classPath, String javaFilePath) throws Exception {
 		CompilationUnit compilationUnit = getCompilationUnit(sourceDir, classPath, javaFilePath);
+		processComments(javaFilePath);
 		Document document = new Document(String.valueOf(Utils.readTextFile(javaFilePath)));
 		AST ast = compilationUnit.getAST();
 		ASTRewrite astRewrite = ASTRewrite.create(ast);
@@ -100,6 +82,7 @@ public class JavaNormalizer {
 		new File(javaFilePath + ".normalized").renameTo(new File(javaFilePath));
 	}
 	
+
 	private CompilationUnit getCompilationUnit(String[] sourceDir, String[] classPath, String javaFilePath) {
 		ASTParser parser = ASTParser.newParser(AST.JLS4);
 		parser.setResolveBindings(true);

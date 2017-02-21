@@ -65,7 +65,11 @@ public class STS extends AbstractBaseGraph<Integer, Transition> implements Direc
 	@SuppressWarnings("unchecked")
 	public void generateAspect(String sourcePath, String targetPath) throws IOException{
 		Hashtable<String, TypeDeclaration> classes = getClasses(sourcePath);
-		for (String controllableMethodName : controllableMethodNames) {
+		HashSet<String> methodNames = new HashSet<>();
+		methodNames.addAll(controllableMethodNames);
+		methodNames.add("se.lnu.CaseStudy.dummy1");
+		methodNames.add("se.lnu.CaseStudy.dummy2");
+		for (String controllableMethodName : methodNames) {
 			MethodDeclaration methodDeclaration = getMethodDeclaration(classes, controllableMethodName);
 			String parameters = methodDeclaration.parameters().toString().replace("[", "").replace("]", "");
 			String parameterNames = "";
@@ -247,7 +251,7 @@ public class STS extends AbstractBaseGraph<Integer, Transition> implements Direc
 			}
 			Hashtable<String, String> initialValues = getInitialValues(this.incomingEdgesOf(location));
 			for (Transition transition : this.outgoingEdgesOf(location)) {
-				String updater = transition.getUpdater().replaceAll("==", "#").replaceAll("!=", "<");
+				String updater = transition.getUpdater().replaceAll("==", "#").replaceAll("!=", "<>");
 				String newUpdater = updater.replaceAll("\\s*=", "=");
 				for (String variable : initialValues.keySet()) {
 					if(!newUpdater.contains(variable+"=")){
@@ -258,7 +262,7 @@ public class STS extends AbstractBaseGraph<Integer, Transition> implements Direc
 //				if(/*variable.equals("LXI_se_lnu_User_getStrangerInformation___X0")*/newUpdater.matches(".*false\\s*=.*")){
 //					System.out.println(newUpdater);
 //				}
-				transition.setUpadater(newUpdater.replaceAll("#", "==").replaceAll("<", "!="));
+				transition.setUpadater(newUpdater.replaceAll("#", "==").replaceAll("<>", "!="));
 				if(this.getEdgeTarget(transition)!=0 && (!visited.contains(this.getEdgeTarget(transition))
 						|| !newUpdater.replaceAll("\\s", "").equals(updater.replaceAll("\\s", "")))){
 					queue.add(this.getEdgeTarget(transition));
@@ -366,6 +370,18 @@ public class STS extends AbstractBaseGraph<Integer, Transition> implements Direc
 		STS sts = (STS) this.clone();
 		Transition transition = nextUncontrollable(sts);
 		while(transition!=null){
+//			System.out.println(sts.getEdgeSource(transition) + ", " + sts.getEdgeTarget(transition));
+//			try {
+//				STS sts2 = (STS) sts.clone();
+//				for (Transition transition2 : sts2.edgeSet()) {
+//					transition2.setUpadater("");
+//					transition2.setGuard("(true)");;
+//				}
+//				sts2.saveAsDot("/home/mohsen/git/runningexample/aspects/m.dot");
+//			} catch (Exception e) {
+//				// TODO Auto-generated catch block
+//				e.printStackTrace();
+//			}
 			Set<Transition> incomingTransitions = new HashSet<>();
 			incomingTransitions.addAll(sts.incomingEdgesOf(sts.getEdgeSource(transition)));
 			for (Transition incomingTransition : incomingTransitions) {
@@ -376,6 +392,17 @@ public class STS extends AbstractBaseGraph<Integer, Transition> implements Direc
 				sts.removeVertex(sts.getEdgeSource(transition));
 			}
 			transition = nextUncontrollable(sts);
+//			try {
+//				STS sts2 = (STS) sts.clone();
+//				for (Transition transition2 : sts2.edgeSet()) {
+//					transition2.setUpadater("");
+//					transition2.setGuard("(true)");;
+//				}
+//				sts2.saveAsDot("/home/mohsen/git/runningexample/aspects/m.dot");
+//			} catch (Exception e) {
+//				// TODO Auto-generated catch block
+//				e.printStackTrace();
+//			}
 		}
 		clearUpdaters(sts);
 		removeSTARTTransitions(sts);
@@ -442,7 +469,10 @@ public class STS extends AbstractBaseGraph<Integer, Transition> implements Direc
 	}
 
 	private void mergeTransitions(STS sts, Transition incomingTransition, Transition outgoingTransition) {
-		if(controllableEvents.contains(incomingTransition.getEvent()) || sts.getEdgeSource(incomingTransition)!=sts.getEdgeTarget(outgoingTransition)){
+		if(controllableEvents.contains(incomingTransition.getEvent()) || 
+				incomingTransition.getEvent().equals("se_lnu_CaseStudy_dummy1") || 
+				incomingTransition.getEvent().equals("se_lnu_CaseStudy_dummy2") || 
+				sts.getEdgeSource(incomingTransition)!=sts.getEdgeTarget(outgoingTransition)){
 			String guard1 = convertToSTSSyntax(incomingTransition.getGuard()).replaceAll("\\s+", " ");
 			if(needParenthesis(guard1)){
 				guard1 = "(" + guard1 + ")";
@@ -502,7 +532,7 @@ public class STS extends AbstractBaseGraph<Integer, Transition> implements Direc
 	private Transition nextUncontrollable(STS sts) {
 		Transition res = null;
 		for (Transition transition : sts.edgeSet()) {
-			if(!controllableEvents.contains(transition.getEvent())){
+			if(!transition.getEvent().equals("se_lnu_CaseStudy_dummy1") && !transition.getEvent().equals("se_lnu_CaseStudy_dummy2") && !controllableEvents.contains(transition.getEvent())){
 				res = transition;
 				break;
 			}
