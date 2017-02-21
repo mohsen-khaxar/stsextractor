@@ -32,6 +32,8 @@ import java.util.regex.Pattern;
  * 
  * Instead of the keywords expression, securityLevel, and policyType, it can be to use e, sl, and pt respectively.
  * Note that the security annotations must be just declared in comment blocks not comment line, otherwise they are ignored. 
+ * The annotations @ObservationPoint and @Init must be declared just before of invocation of third-party methods while, 
+ * the annotation @CheckPoint must be declared before method declarations.
  * @author mohsen
  *
  */
@@ -71,8 +73,9 @@ public class CommentProcessor {
 				+ "/\\*"
 				+ "[\\*\\s]*"
 					+ "@CheckPoint"
-				+ "[\\*\\s]*"
-				+ "\\*/";
+				+ "[\\*\\s]*"	
+				+ "\\*/"
+				+ "[^\\{]*{";
 		Pattern pattern = Pattern.compile(regex);
         Matcher matcher = pattern.matcher(code);
         StringBuffer processedCode = new StringBuffer();
@@ -112,12 +115,20 @@ public class CommentProcessor {
 	}
 
 	/**
-	 * It maps the annotation @CheckPoint to a statement invoking the method \"se.lnu.checkPoint();\".
+	 * It clears the annotation @CheckPoint before the method declaration and adds a statement invoking the method \"se.lnu.checkPoint\" 
+	 * to the fist line of the method declaration. It also extracts the name of the declared method and passes it through \"se.lnu.checkPoint\".
 	 * @param checkPoint a check point that is declared in a comment block
 	 * @return the constant string \"se.lnu.checkPoint();\"
 	 */
 	private static String processCheckPoint(String checkPoint) {
-		return "se.lnu.checkPoint();";
+		String processed = checkPoint.replace("/\\*[\\*\\s]*@CheckPoint[\\*\\s]*\\*/", "");
+		String methodName = processed.replace("\\s*\\(", "(");
+		methodName = methodName.replaceAll("\\s", " ").replaceAll("  ", "");
+		methodName = methodName.substring(0, processed.indexOf("(")-1);
+		String[] parts = processed.split(" ");
+		methodName = parts[parts.length-1];
+		processed += "se.lnu.checkPoint(\"" + methodName + "\");";
+		return processed;
 	}
 
 	/**
