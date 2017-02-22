@@ -133,4 +133,9 @@ public class ASTHelper {
 			throw new Exception("\"" + insertionPoint.toString() + "\" and \"" + insertingNode.toString() + "\" must be statement.");
 		}
 	}
+
+	public void insertExpressionInsteadOf(ASTNode insertionPoint, ASTNode insertingNode) {
+		astRewrite.replace(insertionPoint, insertingNode, null);
+		
+	}
 }

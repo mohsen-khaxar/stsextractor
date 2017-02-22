@@ -1,6 +1,7 @@
 package se.lnu.prosses.securityMonitor;
 
 import java.util.ArrayList;
+import java.util.List;
 import java.util.Stack;
 
 import org.eclipse.jdt.core.dom.ASTNode;
@@ -20,7 +21,7 @@ public class JavaExpressionNormalizer {
 		this.astHelper = astHelper;
 	}
 	
-	public ArrayList<ASTNode> normalizeExpresion(Expression expression){
+	public List<ASTNode> normalize(Expression expression){
 		Stack<Object[]> stack = new Stack<>();
 		int index = 0;
 		stack.push(new Object[]{index, expression});

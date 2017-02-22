@@ -219,6 +219,12 @@ public class JavaClassNormalizer {
 	}
 	
 	private String normalizeDoStatement(DoStatement doStatement) {
+		List<ASTNode> normalizedExpression = javaExpressionNormalizer.normalize(doStatement.getExpression());
+		ASTNode insertionPoint = whileStatement;
+		for (ASTNode astNode : normalizedExpression) {
+			astHelper.insertStatementBefore(insertionPoint, astNode);
+			insertionPoint = astNode;
+		}
 		String statementString = "__C = " + doStatement.getExpression().toString() + ";";
 		String normalizedDoExpression = normalize(ASTParser.K_STATEMENTS, statementString, doStatement);
 		List<Statement> statements = normalizeStatement(doStatement.getBody());
@@ -230,39 +236,31 @@ public class JavaClassNormalizer {
 		return normalizedCode;
 	}
 
-	private String normalizeWhileStatement(WhileStatement whileStatement) {
-		String statementString = "__C = " + whileStatement.getExpression().toString() + ";";
-		String normalizedWhileExpression = normalize(ASTParser.K_STATEMENTS, statementString, whileStatement);
-		List<Statement> statements = normalizeStatement(whileStatement.getBody());
-		String normalizedWhileBody = "";
-		for ( Statement bodyStatement : statements) {
-			normalizedWhileBody += bodyStatement.toString();
+	private void normalizeWhileStatement(WhileStatement whileStatement) throws Exception {
+		List<ASTNode> normalizedExpression = javaExpressionNormalizer.normalize(whileStatement.getExpression());
+		astHelper.insertExpressionInsteadOf(whileStatement.getExpression(), normalizedExpression.get(0));
+		normalizedExpression.remove(0);
+		ASTNode insertionPoint = whileStatement;
+		for (ASTNode astNode : normalizedExpression) {
+			astHelper.insertStatementBefore(insertionPoint, astNode);
+			insertionPoint = astNode;
 		}
-		String normalizedCode = normalizedWhileExpression + "while(__C){" + normalizedWhileBody + normalizedWhileExpression + "}";
-		return normalizedCode;
+		normalizeStatement(whileStatement.getBody());
 	}
 
-	private String normalizeIfStatement(IfStatement ifStatement) {
-		String statementString = "__C = " + ifStatement.getExpression().toString() + ";";
-		String normalizedIfExpression = normalize(ASTParser.K_STATEMENTS, statementString, ifStatement);
-		statementString = ifStatement.getThenStatement().toString();
-		List<Statement> statements = normalizeStatement(ifStatement.getThenStatement());
-		String normalizedThenStatement = "";
-		for ( Statement thenStatement : statements) {
-			normalizedThenStatement += thenStatement.toString();
+	private void normalizeIfStatement(IfStatement ifStatement) throws Exception {
+		List<ASTNode> normalizedExpression = javaExpressionNormalizer.normalize(ifStatement.getExpression());
+		astHelper.insertExpressionInsteadOf(ifStatement.getExpression(), normalizedExpression.get(0));
+		normalizedExpression.remove(0);
+		ASTNode insertionPoint = ifStatement;
+		for (ASTNode astNode : normalizedExpression) {
+			astHelper.insertStatementBefore(insertionPoint, astNode);
+			insertionPoint = astNode;
 		}
-		String normalizedCode = "";
+		normalizeStatement(ifStatement.getThenStatement());
 		if(ifStatement.getElseStatement()!=null){
-			statements = normalizeStatement(ifStatement.getElseStatement());
-			String normalizedElseStatement = "";
-			for ( Statement elseStatement : statements) {
-				normalizedElseStatement += elseStatement.toString();
-			}
-			normalizedCode  = normalizedIfExpression + " if(__C){" + normalizedThenStatement + "}else{" + normalizedElseStatement + "}";
-		}else{
-			normalizedCode = normalizedIfExpression + " if(__C){" + normalizedThenStatement + "}";
+			normalizeStatement(ifStatement.getThenStatement());
 		}
-		return normalizedCode;
 	}
 
 	private boolean isNormalized(ASTNode node) {
