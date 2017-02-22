@@ -3,8 +3,8 @@ package se.lnu.prosses.securityMonitor;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
-import org.eclipse.jdt.core.JavaCore;
+import java.util.Stack;
+
 import org.eclipse.jdt.core.dom.AST;
 import org.eclipse.jdt.core.dom.ASTNode;
 import org.eclipse.jdt.core.dom.ASTParser;
@@ -24,6 +24,7 @@ import org.eclipse.jdt.core.dom.MethodInvocation;
 import org.eclipse.jdt.core.dom.ParenthesizedExpression;
 import org.eclipse.jdt.core.dom.PostfixExpression;
 import org.eclipse.jdt.core.dom.PrefixExpression;
+import org.eclipse.jdt.core.dom.SimpleName;
 import org.eclipse.jdt.core.dom.Statement;
 import org.eclipse.jdt.core.dom.SwitchCase;
 import org.eclipse.jdt.core.dom.SwitchStatement;
@@ -36,17 +37,27 @@ import org.eclipse.jface.text.Document;
 import org.eclipse.text.edits.TextEdit;
 import se.lnu.prosses.securityMonitor.Utils;
 
-public class JavaNormalizer {
+public class JavaClassNormalizer {
 
+	ASTHelper astHelper;
+	JavaExpressionNormalizer javaExpressionNormalizer;
+	String javaFilePath;
 	int variableCounter = 0;
 	
-	public void normalize(String[] sourceDir, String[] classPath, String javaFilePath) throws Exception {
-		CompilationUnit compilationUnit = getCompilationUnit(sourceDir, classPath, javaFilePath);
+	public static void main(String[] args) throws Exception {
+	}
+	
+	public JavaClassNormalizer(String[] sourceDir, String[] classPath, String javaFilePath) {
+		astHelper = new ASTHelper(sourceDir, classPath, javaFilePath);
+		javaExpressionNormalizer = new JavaExpressionNormalizer(astHelper);
+		this.javaFilePath = javaFilePath;
+	}
+	
+	public void normalize() throws Exception {
 		CommentProcessor.process(javaFilePath);
-		Document document = new Document(String.valueOf(Utils.readTextFile(javaFilePath)));
-		AST ast = compilationUnit.getAST();
-		ASTRewrite astRewrite = ASTRewrite.create(ast);
-		for (MethodDeclaration methodDeclaration : ((TypeDeclaration)compilationUnit.types().get(0)).getMethods()) {
+		CompilationUnit compilationUnit = astHelper.getCompilationUnit();
+		MethodDeclaration[] methods = ((TypeDeclaration)compilationUnit.types().get(0)).getMethods();
+		for (MethodDeclaration methodDeclaration : methods) {
 			List<Statement> statements = normalizeStatement(methodDeclaration.getBody());
 			String blockCode = "{";
 			blockCode += "boolean __C = false; int __XL0 = 0; int __XL1 = 0;";
@@ -54,32 +65,12 @@ public class JavaNormalizer {
 				blockCode += statement.toString();
 			}
 			blockCode += "}";
-			Block block = (Block) parse(blockCode , ASTParser.K_STATEMENTS);
+			Block block = (Block) ASTHelper.parse(blockCode , ASTParser.K_STATEMENTS);
 			astRewrite.replace(methodDeclaration.getBody(), block, null);
 		}
-		TextEdit edits = astRewrite.rewriteAST(document, null);
-		edits.apply(document);
-		Utils.writeTextFile(javaFilePath + ".normalized", document.get());
-		
-		new File(javaFilePath).renameTo(new File(javaFilePath + "_"));
-		new File(javaFilePath + ".normalized").renameTo(new File(javaFilePath));
+		astHelper.saveModifiedJavaFile();
 	}
 	
-
-	private CompilationUnit getCompilationUnit(String[] sourceDir, String[] classPath, String javaFilePath) {
-		ASTParser parser = ASTParser.newParser(AST.JLS4);
-		parser.setResolveBindings(true);
-		parser.setKind(ASTParser.K_COMPILATION_UNIT);
-		parser.setBindingsRecovery(true);
-		@SuppressWarnings("rawtypes")
-		Map options = JavaCore.getOptions();
-		parser.setCompilerOptions(options);
-		parser.setSource(Utils.readTextFile(javaFilePath));
-		parser.setUnitName(new File(javaFilePath).getName());
-		parser.setEnvironment(classPath, sourceDir, new String[] { "UTF-8"}, true);
-		CompilationUnit compilationUnit = (CompilationUnit) parser.createAST(null);
-		return compilationUnit;
-	}
 
 	@SuppressWarnings("unchecked")
 	private List<Statement> normalizeStatement(Statement statement) {
@@ -96,7 +87,7 @@ public class JavaNormalizer {
 				Expression variableDeclarationFragmentInitializer = variableDeclarationFragment.getInitializer();
 				if(variableDeclarationFragmentInitializer!=null && !isNormalized(variableDeclarationFragmentInitializer)){
 					String tempX = "__X" + variableCounter++;
-					normalizedFragments += normalize(ASTParser.K_STATEMENTS, getType(variableDeclarationFragmentInitializer.toString(), variableDeclarationFragmentInitializer) + " " + tempX + "=" + variableDeclarationFragmentInitializer.toString() + ";", variableDeclarationFragmentInitializer);
+					normalizedFragments += normalize(ASTParser.K_STATEMENTS, ASTHelper.getType(variableDeclarationFragmentInitializer.toString(), variableDeclarationFragmentInitializer) + " " + tempX + "=" + variableDeclarationFragmentInitializer.toString() + ";", variableDeclarationFragmentInitializer);
 					normalizedCode = normalizedCode.replace(variableDeclarationFragmentInitializer.toString(), tempX);
 				}
 			} 
@@ -274,101 +265,6 @@ public class JavaNormalizer {
 		return normalizedCode;
 	}
 
-	ASTNode childNode;
-	Integer level = 1;
-	private String normalize(int codeType, String code, ASTNode origin) {
-		String res = "";
-		while(true){
-			ASTNode node = parse(code, codeType);
-			code = node.toString();
-			if(isNormalized(node)){
-				break;
-			}
-			if(node.getNodeType()==ASTNode.VARIABLE_DECLARATION_STATEMENT){
-				node = ((VariableDeclarationFragment)((VariableDeclarationStatement)node).fragments().get(0)).getInitializer();
-			}
-			if(node.getNodeType()==ASTNode.EXPRESSION_STATEMENT){
-				node = ((ExpressionStatement)node).getExpression();
-				while(node.getNodeType()==ASTNode.PARENTHESIZED_EXPRESSION){
-					node = ((ParenthesizedExpression)node).getExpression();
-				}
-			}
-			if(node.getNodeType()==ASTNode.ASSIGNMENT){
-				node = ((Assignment)node).getRightHandSide();
-			}
-			childNode = null;
-			if(node.getNodeType()==ASTNode.INFIX_EXPRESSION || node.getNodeType()==ASTNode.POSTFIX_EXPRESSION || node.getNodeType()==ASTNode.PREFIX_EXPRESSION || node.getNodeType()==ASTNode.METHOD_INVOCATION){
-				level = 1;
-			}else{
-				level = 0;
-			}
-			node.accept(new ASTVisitor() {
-				@Override
-				public boolean visit(InfixExpression node) {
-					if(level==1){
-						level--;
-						return true;
-					}else{
-						childNode = node;
-						return false;
-					}
-				}
-				@Override
-				public boolean visit(PrefixExpression node) {
-					if(level==1){
-						level--;
-						return true;
-					}else{
-						childNode = node;
-						return false;
-					}
-				}
-				@Override
-				public boolean visit(PostfixExpression node) {
-					if(level==1){
-						level--;
-						return true;
-					}else{
-						childNode = node;
-						return false;
-					}
-				}
-				@Override
-				public boolean visit(MethodInvocation node) {
-					if(level==1){
-						level--;
-						return true;
-					}else{
-						childNode = node;
-						return false;
-					}
-				}
-			});
-			if(childNode==null){
-				break;
-			}else{
-				String x = "__X" + String.valueOf(variableCounter++);
-				code = code.replaceFirst("\\Q" + childNode.toString() + "\\E", x);
-				res += normalize(ASTParser.K_STATEMENTS, getType(childNode.toString(), origin) + " " + x + " = "/*	+ "(Object)("*/ + childNode.toString()/* + ")" */+ ";", origin);
-			}
-		}
-		res += code;
-		return res;
-	}
-	
-	static String type = "";
-	String getType(final String nodeString, ASTNode origin){
-		origin.accept(new ASTVisitor() {
-			@Override
-			public void preVisit(ASTNode node) {
-				if(node.toString().equals(nodeString)){
-					type = ((Expression)node).resolveTypeBinding().getQualifiedName();
-				}
-			}
-		});
-		return type;
-	}
-
 	private boolean isNormalized(ASTNode node) {
 		boolean normalized = false;
 		if(node.getNodeType()==ASTNode.EXPRESSION_STATEMENT){
@@ -387,7 +283,7 @@ public class JavaNormalizer {
 				}
 			}
 			normalized = allArgsNormalized;
-		} else if (!hasMethodInvokation(node)) {
+		} else if (!ASTHelper.hasMethodInvokation(node)) {
 			normalized = true;
 		}
 		if(node.getNodeType()==ASTNode.VARIABLE_DECLARATION_STATEMENT&&((VariableDeclarationStatement)node).fragments().size()==1
@@ -396,29 +292,4 @@ public class JavaNormalizer {
 		}
 		return normalized;
 	}
-
-	Boolean has = false;
-	private boolean hasMethodInvokation(ASTNode node) {
-		has = false;
-		node.accept(new ASTVisitor() {
-			@Override
-			public boolean visit(MethodInvocation methodInvocation) {
-				has = true;
-				return !has;
-			}
-		});
-		return has;
-	}
-
-	public static ASTNode parse(String code, int type) {
-		ASTParser parser = ASTParser.newParser(AST.JLS4);
-		parser.setSource(code.toCharArray());
-		parser.setKind(type);
-		ASTNode res = parser.createAST(null);
-		if(type==ASTParser.K_STATEMENTS){
-			res = (ASTNode) ((Block)res).statements().get(0);
-		}
-		return res;
-	}
-
 }

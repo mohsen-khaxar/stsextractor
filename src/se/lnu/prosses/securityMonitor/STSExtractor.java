@@ -196,7 +196,7 @@ public class STSExtractor {
 		String[] sourceDir = new String[]{directoryPath};
 		ArrayList<String> javaFilePaths = getAllJavaFilePaths(directoryPath);
 		for (String javaFilePath : javaFilePaths) {
-			JavaNormalizer javaNormalizer = new JavaNormalizer();
+			JavaNormalizerOld javaNormalizer = new JavaNormalizerOld();
 			javaNormalizer.normalize(sourceDir, classPath, javaFilePath);
 			CompilationUnit compilationUnit = getCompilationUnit(sourceDir, classPath, javaFilePath);
 			if(compilationUnit.types().size()>0&&!((TypeDeclaration)compilationUnit.types().get(0)).isInterface()){
