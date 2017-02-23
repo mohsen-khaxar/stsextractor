@@ -11,8 +11,10 @@ import org.eclipse.jdt.core.dom.ASTVisitor;
 import org.eclipse.jdt.core.dom.Block;
 import org.eclipse.jdt.core.dom.CompilationUnit;
 import org.eclipse.jdt.core.dom.Expression;
+import org.eclipse.jdt.core.dom.ITypeBinding;
 import org.eclipse.jdt.core.dom.MethodInvocation;
 import org.eclipse.jdt.core.dom.Statement;
+import org.eclipse.jdt.core.dom.VariableDeclarationStatement;
 import org.eclipse.jdt.core.dom.rewrite.ASTRewrite;
 import org.eclipse.jdt.core.dom.rewrite.ListRewrite;
 import org.eclipse.jface.text.Document;
@@ -91,8 +93,12 @@ public class ASTHelper {
 		return type;
 	}
 	
-	public String getExpressionType(Expression expression){
+	public String getExpressionTypeName(Expression expression){
 		return expression.resolveTypeBinding().getQualifiedName();
+	}
+	
+	public ITypeBinding getExpressionType(Expression expression){
+		return expression.resolveTypeBinding();
 	}
 	
 	public void saveModifiedJavaFile() throws Exception{
@@ -136,6 +142,9 @@ public class ASTHelper {
 
 	public void insertExpressionInsteadOf(ASTNode insertionPoint, ASTNode insertingNode) {
 		astRewrite.replace(insertionPoint, insertingNode, null);
-		
+	}
+
+	public void removeStatement(ASTNode astNode) {
+		astRewrite.remove(astNode, null);
 	}
 }
