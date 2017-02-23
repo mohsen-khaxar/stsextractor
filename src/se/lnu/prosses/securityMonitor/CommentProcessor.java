@@ -75,7 +75,7 @@ public class CommentProcessor {
 					+ "@CheckPoint"
 				+ "[\\*\\s]*"	
 				+ "\\*/"
-				+ "[^\\{]*{";
+				+ "[^\\{]*\\{";
 		Pattern pattern = Pattern.compile(regex);
         Matcher matcher = pattern.matcher(code);
         StringBuffer processedCode = new StringBuffer();

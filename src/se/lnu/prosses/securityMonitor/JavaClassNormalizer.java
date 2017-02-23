@@ -18,6 +18,7 @@ import org.eclipse.jdt.core.dom.SwitchCase;
 import org.eclipse.jdt.core.dom.SwitchStatement;
 import org.eclipse.jdt.core.dom.TypeDeclaration;
 import org.eclipse.jdt.core.dom.VariableDeclarationExpression;
+import org.eclipse.jdt.core.dom.VariableDeclarationFragment;
 import org.eclipse.jdt.core.dom.VariableDeclarationStatement;
 import org.eclipse.jdt.core.dom.WhileStatement;
 
@@ -29,16 +30,21 @@ public class JavaClassNormalizer {
 	int variableCounter = 0;
 	
 	public static void main(String[] args) throws Exception {
+		String[] sourceDir = new String[]{"/home/mohsen/git/runningexample/src"};
+		String[] classPath = new String[]{"/home/mohsen/git/runningexample/src", "/home/mohsen/git/stsextractor/src"};
+		String javaFilePath = "/home/mohsen/git/runningexample/src/se/lnu/A.java";
+		JavaClassNormalizer classNormalizer = new JavaClassNormalizer(sourceDir, classPath, javaFilePath);
+		classNormalizer.normalize();
 	}
 	
-	public JavaClassNormalizer(String[] sourceDir, String[] classPath, String javaFilePath) {
+	public JavaClassNormalizer(String[] sourceDir, String[] classPath, String javaFilePath) throws Exception {
+		CommentProcessor.process(javaFilePath);
 		astHelper = new ASTHelper(sourceDir, classPath, javaFilePath);
 		javaExpressionNormalizer = new JavaExpressionNormalizer(astHelper);
 		this.javaFilePath = javaFilePath;
 	}
 	
 	public void normalize() throws Exception {
-		CommentProcessor.process(javaFilePath);
 		CompilationUnit compilationUnit = astHelper.getCompilationUnit();
 		MethodDeclaration[] methods = ((TypeDeclaration)compilationUnit.types().get(0)).getMethods();
 		for (MethodDeclaration methodDeclaration : methods) {
@@ -95,28 +101,28 @@ public class JavaClassNormalizer {
 
 	private void normalizeExpressionStatement(ExpressionStatement expressionStatement) throws Exception {
 		List<ASTNode> normalizedExpression = javaExpressionNormalizer.normalize(expressionStatement.getExpression());	
-		ASTNode insertionPoint = null;
+		for (int i = normalizedExpression.size()-1; i>0; i--) {
+			astHelper.insertStatementBefore(expressionStatement, normalizedExpression.get(i));
+		}
+		ASTNode normalizedAssignment = null;
 		if(expressionStatement.getExpression() instanceof Assignment){
-			insertionPoint = normalizedExpression.get(0);
+			normalizedAssignment = normalizedExpression.get(0);
 		}else{
-			insertionPoint = astHelper.parse(normalizedExpression.get(0).toString() + ";", ASTParser.K_STATEMENTS);
+			normalizedAssignment = astHelper.parse(normalizedExpression.get(0).toString() + ";", ASTParser.K_STATEMENTS);
 		}
-		astHelper.insertExpressionInsteadOf(expressionStatement, insertionPoint);
-		normalizedExpression.remove(0);
-		for (ASTNode astNode : normalizedExpression) {
-			astHelper.insertStatementBefore(insertionPoint, astNode);
-			insertionPoint = astNode;
-		}
+		astHelper.insertExpressionInsteadOf(expressionStatement, normalizedAssignment);
 	}
 
 	private void normalizeVariabledeclarationStatement(VariableDeclarationStatement variableDeclarationStatement) throws Exception {
-		VariableDeclarationExpression variableDeclarationExpression = 
-				(VariableDeclarationExpression) astHelper.parse(variableDeclarationStatement.toString().replace(";", ""), ASTParser.K_EXPRESSION);
-		List<ASTNode> normalizedExpression = javaExpressionNormalizer.normalize(variableDeclarationExpression);
-		ASTNode insertionPoint = variableDeclarationStatement;
-		for (ASTNode astNode : normalizedExpression) {
-			astHelper.insertStatementBefore(insertionPoint, astNode);
-			insertionPoint = astNode;
+		for (Object fragment : variableDeclarationStatement.fragments()) {
+			VariableDeclarationFragment variableDeclarationFragment = (VariableDeclarationFragment)fragment;
+			List<ASTNode> normalizedInitializer = javaExpressionNormalizer.normalize(variableDeclarationFragment.getInitializer());
+			for (int i = normalizedInitializer.size()-1; i>0; i--) {
+				astHelper.insertStatementBefore(variableDeclarationStatement, normalizedInitializer.get(i));
+			}
+			String assignmentCode = variableDeclarationStatement.getType().toString() + " " 
+					+ variableDeclarationFragment.getName() + " = " + normalizedInitializer.get(0).toString() + ";";
+			astHelper.insertStatementBefore(variableDeclarationStatement, astHelper.parse(assignmentCode, ASTParser.K_STATEMENTS));
 		}
 		astHelper.removeStatement(variableDeclarationStatement);
 	}
@@ -124,17 +130,15 @@ public class JavaClassNormalizer {
 	private void normalizeEnhancedForStatement(EnhancedForStatement enhancedForStatement) throws Exception {	
 		List<ASTNode> normalizedExpression = javaExpressionNormalizer.normalize(enhancedForStatement.getExpression());
 		String enhancedForExpression = normalizedExpression.get(0).toString();
-		normalizedExpression.remove(0);
-		ASTNode insertionPoint = enhancedForStatement;
-		for (ASTNode astNode : normalizedExpression) {
-			astHelper.insertStatementBefore(insertionPoint, astNode);
-			insertionPoint = astNode;
+		for (int i = normalizedExpression.size()-1; i>0; i--) {
+			astHelper.insertStatementBefore(enhancedForStatement, normalizedExpression.get(0));
 		}
 		normalizeStatement(enhancedForStatement.getBody());
 		String loopParameter = enhancedForStatement.getParameter().getName().toString();
 		String loopParameterType = enhancedForStatement.getParameter().getType().toString();
 		String normalizedWhileCode = "";
 		String x = "__X0";
+		astHelper.insertStatementBefore(enhancedForStatement, astHelper.parse("int " + x + " = 0;", ASTParser.K_STATEMENTS));
 		if(astHelper.getExpressionType(enhancedForStatement.getExpression()).isArray()){
 			normalizedWhileCode = "while(" + x + "<(" + enhancedForExpression + ").length){" + loopParameterType + " " + loopParameter 
 					+ " = (" + enhancedForExpression + ")[" + x + "];" + x + "++;" + enhancedForStatement.getBody().toString() + "}"; 
@@ -148,11 +152,8 @@ public class JavaClassNormalizer {
 	private void normalizeSwitchStatement(SwitchStatement switchStatement) throws Exception {
 		List<ASTNode> normalizedExpression = javaExpressionNormalizer.normalize(switchStatement.getExpression());
 		String switchVariable = normalizedExpression.get(0).toString();
-		normalizedExpression.remove(0);
-		ASTNode insertionPoint = switchStatement;
-		for (ASTNode astNode : normalizedExpression) {
-			astHelper.insertStatementBefore(insertionPoint, astNode);
-			insertionPoint = astNode;
+		for (int i = normalizedExpression.size()-1; i>0; i--) {
+			astHelper.insertStatementBefore(switchStatement, normalizedExpression.get(i));
 		}
 		@SuppressWarnings("unchecked")
 		List<Statement> switchStatements = switchStatement.statements();
@@ -190,17 +191,13 @@ public class JavaClassNormalizer {
 		List<VariableDeclarationExpression> initializers = forStatement.initializers();
 		for (VariableDeclarationExpression initializer : initializers) {
 			List<ASTNode> normalizedInitializer = javaExpressionNormalizer.normalize(initializer);
-			ASTNode insertionPoint = forStatement;
-			for (ASTNode astNode : normalizedInitializer) {
-				astHelper.insertStatementBefore(insertionPoint, astNode);
-				insertionPoint = astNode;
+			for (int i = normalizedInitializer.size()-1; i>=0; i--) {
+				astHelper.insertStatementBefore(forStatement, normalizedInitializer.get(i));
 			}
 		}
 		List<ASTNode> normalizedExpression = javaExpressionNormalizer.normalize(forStatement.getExpression());
-		ASTNode insertionPoint = forStatement;
-		for (ASTNode astNode : normalizedExpression) {
-			astHelper.insertStatementBefore(insertionPoint, astNode);
-			insertionPoint = astNode;
+		for (int i = normalizedExpression.size()-1; i>0; i--) {
+			astHelper.insertStatementBefore(forStatement, normalizedExpression.get(i));
 		}
 		normalizeStatement(forStatement.getBody());
 		String whileCode = "while(" + normalizedExpression.get(0).toString() + "){"
@@ -212,7 +209,7 @@ public class JavaClassNormalizer {
 				whileCode += astNode + ";";
 			}
 		}
-		whileCode = "}";
+		whileCode += "}";
 		astHelper.insertExpressionInsteadOf(forStatement, astHelper.parse(whileCode, ASTParser.K_STATEMENTS));
 	}
 	
@@ -221,30 +218,25 @@ public class JavaClassNormalizer {
 		Block body = (Block) doStatement.getBody();
 		normalizeStatement(body);
 		astHelper.insertStatementBefore(doStatement, body);
-		ASTNode insertionPoint = body;
 		for (int i=normalizedExpression.size()-1; i>0; i--) {
-			astHelper.insertStatementAfter(insertionPoint, normalizedExpression.get(i));
-			insertionPoint = normalizedExpression.get(i);
+			astHelper.insertStatementBefore(doStatement, normalizedExpression.get(i));
 		}
-		String normalizedWhileCode = "while (" + normalizedExpression.get(0).toString() + ")" + body.toString();
+		String normalizedWhileCode = "while (" + normalizedExpression.get(0).toString() + "){" + body.toString();
+		for (int i=normalizedExpression.size()-1; i>0; i--) {
+			VariableDeclarationStatement variableDeclarationStatement = (VariableDeclarationStatement) normalizedExpression.get(i); 
+			VariableDeclarationFragment variableDeclarationFragment = (VariableDeclarationFragment)variableDeclarationStatement.fragments().get(0);
+			normalizedWhileCode += variableDeclarationFragment.getName() + " = " + variableDeclarationFragment.getInitializer() + ";";
+		}
+		normalizedWhileCode += "}";
 		WhileStatement whileStatement = (WhileStatement) astHelper.parse(normalizedWhileCode, ASTParser.K_STATEMENTS);
-		List whileStatements = ((Block)whileStatement.getBody()).statements();
-		insertionPoint = (ASTNode) whileStatements.get(whileStatements.size()-1);
-		for (int i=normalizedExpression.size()-1; i>0; i--) {
-			astHelper.insertStatementAfter(insertionPoint, normalizedExpression.get(i));
-			insertionPoint = normalizedExpression.get(i);
-		}
 		astHelper.insertExpressionInsteadOf(doStatement, whileStatement);
 	}
 
 	private void normalizeWhileStatement(WhileStatement whileStatement) throws Exception {
 		List<ASTNode> normalizedExpression = javaExpressionNormalizer.normalize(whileStatement.getExpression());
 		astHelper.insertExpressionInsteadOf(whileStatement.getExpression(), normalizedExpression.get(0));
-		normalizedExpression.remove(0);
-		ASTNode insertionPoint = whileStatement;
-		for (ASTNode astNode : normalizedExpression) {
-			astHelper.insertStatementBefore(insertionPoint, astNode);
-			insertionPoint = astNode;
+		for (int i=normalizedExpression.size()-1; i>0; i--) {
+			astHelper.insertStatementBefore(whileStatement, normalizedExpression.get(i));
 		}
 		normalizeStatement(whileStatement.getBody());
 	}
@@ -252,11 +244,8 @@ public class JavaClassNormalizer {
 	private void normalizeIfStatement(IfStatement ifStatement) throws Exception {
 		List<ASTNode> normalizedExpression = javaExpressionNormalizer.normalize(ifStatement.getExpression());
 		astHelper.insertExpressionInsteadOf(ifStatement.getExpression(), normalizedExpression.get(0));
-		normalizedExpression.remove(0);
-		ASTNode insertionPoint = ifStatement;
-		for (ASTNode astNode : normalizedExpression) {
-			astHelper.insertStatementBefore(insertionPoint, astNode);
-			insertionPoint = astNode;
+		for (int i=normalizedExpression.size()-1; i>0; i--) {
+			astHelper.insertStatementBefore(ifStatement, normalizedExpression.get(i));
 		}
 		normalizeStatement(ifStatement.getThenStatement());
 		if(ifStatement.getElseStatement()!=null){

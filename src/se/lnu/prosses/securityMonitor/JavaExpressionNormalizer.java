@@ -10,11 +10,13 @@ import org.eclipse.jdt.core.dom.Assignment;
 import org.eclipse.jdt.core.dom.Expression;
 import org.eclipse.jdt.core.dom.InfixExpression;
 import org.eclipse.jdt.core.dom.MethodInvocation;
+import org.eclipse.jdt.core.dom.NullLiteral;
 import org.eclipse.jdt.core.dom.ParenthesizedExpression;
 import org.eclipse.jdt.core.dom.PostfixExpression;
 import org.eclipse.jdt.core.dom.PrefixExpression;
 import org.eclipse.jdt.core.dom.VariableDeclarationExpression;
 import org.eclipse.jdt.core.dom.VariableDeclarationFragment;
+import org.eclipse.jdt.core.dom.VariableDeclarationStatement;
 
 public class JavaExpressionNormalizer {
 	ASTHelper astHelper;
@@ -25,6 +27,7 @@ public class JavaExpressionNormalizer {
 	}
 	
 	public List<ASTNode> normalize(Expression expression){
+		ArrayList<ASTNode> normalizedStatements = new ArrayList<>();
 		index = 0;
 		Stack<Object[]> stack = new Stack<>();
 		if(expression instanceof VariableDeclarationExpression){
@@ -36,7 +39,6 @@ public class JavaExpressionNormalizer {
 		}else{
 			stack.push(new Object[]{"__X0", expression});
 		}
-		ArrayList<ASTNode> normalizedStatements = new ArrayList<>();
 		while(!stack.isEmpty()){
 			Object[] indexAndExpression = stack.pop();
 			if(indexAndExpression[1] instanceof ParenthesizedExpression){
@@ -54,11 +56,22 @@ public class JavaExpressionNormalizer {
 			}else if(indexAndExpression[1] instanceof MethodInvocation){
 				ASTNode astNode = normalizeMethodInvocation(indexAndExpression, stack);
 				normalizedStatements.add(astNode);
+			}else {
+				String assignmentCode = "";
+				if(indexAndExpression[1] instanceof NullLiteral){
+					assignmentCode = "Object " + indexAndExpression[0] + " = " + indexAndExpression[1].toString() + ";";
+				}else{
+					assignmentCode = astHelper.getExpressionTypeName((Expression) indexAndExpression[1]) 
+							+ " " + indexAndExpression[0] + " = " + indexAndExpression[1].toString() + ";";
+				}
+				normalizedStatements.add(astHelper.parse(assignmentCode, ASTParser.K_STATEMENTS));
 			}
 		}
-		if(!(expression instanceof VariableDeclarationExpression) && !(expression instanceof Assignment)){
-			Assignment assignment = (Assignment) normalizedStatements.get(0);
-			normalizedStatements.set(0, assignment.getRightHandSide());
+		VariableDeclarationStatement variableDeclarationStatement = (VariableDeclarationStatement) normalizedStatements.get(0);
+		if(expression instanceof VariableDeclarationExpression){
+			variableDeclarationStatement.setType(((VariableDeclarationExpression)expression).getType());
+		}else if(!(expression instanceof Assignment)){
+			normalizedStatements.set(0, ((VariableDeclarationFragment)variableDeclarationStatement.fragments().get(0)).getInitializer());
 		}
 		return normalizedStatements;
 	}
@@ -66,11 +79,11 @@ public class JavaExpressionNormalizer {
 	private ASTNode normalizeMethodInvocation(Object[] indexAndExpression, Stack<Object[]> stack){
 		MethodInvocation methodInvocation = (MethodInvocation) indexAndExpression[1];
 		String generatedAssignment = astHelper.getExpressionTypeName(methodInvocation) 
-				+ indexAndExpression[0] + " = ";
+				+ " " + indexAndExpression[0] + " = ";
 		generatedAssignment += ((methodInvocation.getExpression()==null)?"":methodInvocation.getExpression().toString() + ".") + methodInvocation.getName() + "("; 
 		String separator = "";
 		for (Object argument : methodInvocation.arguments()) {
-			if(isCompound((Expression) argument)){
+			if(isNormalized((Expression) argument)){
 				index++;
 				stack.push(new Object[]{"__X"+index, argument});
 				generatedAssignment += separator + "__X" + index;
@@ -87,9 +100,9 @@ public class JavaExpressionNormalizer {
 	private ASTNode normalizePostfixExpression(Object[] indexAndExpression, Stack<Object[]> stack){
 		PostfixExpression postfixExpression = (PostfixExpression) indexAndExpression[1];
 		String generatedAssignment = astHelper.getExpressionTypeName(postfixExpression) 
-				+ indexAndExpression[0] + " = ";
+				+ " " + indexAndExpression[0] + " = ";
 		Expression operand = postfixExpression.getOperand();
-		if(isCompound(operand)){
+		if(isNormalized(operand)){
 			index++;
 			stack.push(new Object[]{"__X"+index, operand});
 			generatedAssignment += "__X" + index;
@@ -104,10 +117,10 @@ public class JavaExpressionNormalizer {
 	private ASTNode normalizePrefixExpression(Object[] indexAndExpression, Stack<Object[]> stack){
 		PrefixExpression prefixExpression = (PrefixExpression) indexAndExpression[1];
 		String generatedAssignment = astHelper.getExpressionTypeName(prefixExpression) 
-				+ indexAndExpression[0] + " = ";
+				+ " " + indexAndExpression[0] + " = ";
 		Expression operand = prefixExpression.getOperand();
 		generatedAssignment += prefixExpression.getOperator().toString() + " ";
-		if(isCompound(operand)){
+		if(isNormalized(operand)){
 			index++;
 			stack.push(new Object[]{"__X"+index, operand});
 			generatedAssignment += "__X" + index;
@@ -121,9 +134,9 @@ public class JavaExpressionNormalizer {
 	private ASTNode normalizeInfixExpresion(Object[] indexAndExpression, Stack<Object[]> stack){
 		InfixExpression infixExpression = (InfixExpression) indexAndExpression[1];
 		String generatedAssignment = astHelper.getExpressionTypeName(infixExpression) 
-				+ indexAndExpression[0] + " = ";
+				+ " " + indexAndExpression[0] + " = ";
 		Expression leftOperand = infixExpression.getLeftOperand();
-		if(isCompound(leftOperand)){
+		if(isNormalized(leftOperand)){
 			index++;
 			stack.push(new Object[]{"__X"+index, leftOperand});
 			generatedAssignment += "__X" + index;
@@ -132,7 +145,7 @@ public class JavaExpressionNormalizer {
 		}
 		generatedAssignment += " " + infixExpression.getOperator().toString() + " ";
 		Expression rightOperand = infixExpression.getRightOperand();
-		if(isCompound(rightOperand)){
+		if(isNormalized(rightOperand)){
 			index++;
 			stack.push(new Object[]{"__X"+index, rightOperand});
 			generatedAssignment += "__X" + index;
@@ -143,9 +156,13 @@ public class JavaExpressionNormalizer {
 		return astHelper.parse(generatedAssignment, ASTParser.K_STATEMENTS);
 	}
 	
-	private boolean isCompound(Expression operand) {
-		return operand instanceof InfixExpression || operand instanceof PrefixExpression ||
-				operand instanceof PostfixExpression || operand instanceof MethodInvocation ||
-				operand instanceof ParenthesizedExpression;
+//	private boolean isCompound(Expression operand) {
+//		return operand instanceof InfixExpression || operand instanceof PrefixExpression ||
+//				operand instanceof PostfixExpression || operand instanceof MethodInvocation ||
+//				operand instanceof ParenthesizedExpression;
+//	}
+//	
+	private boolean isNormalized(Expression expression){
+		return !astHelper.hasMethodInvokation(expression);
 	}
 }

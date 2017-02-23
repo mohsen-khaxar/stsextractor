@@ -147,4 +147,17 @@ public class ASTHelper {
 	public void removeStatement(ASTNode astNode) {
 		astRewrite.remove(astNode, null);
 	}
+	
+	static boolean hasMethodInvocation = false;
+	public boolean isNormalized(Expression expression){
+		hasMethodInvocation = false;
+		expression.accept(new ASTVisitor() {
+			@Override
+			public boolean visit(MethodInvocation node) {
+				hasMethodInvocation = true;
+				return false;
+			}
+		});
+		return hasMethodInvocation;
+	}
 }
