@@ -27,7 +27,8 @@ public class JavaClassNormalizer {
 	ASTHelper astHelper;
 	JavaExpressionNormalizer javaExpressionNormalizer;
 	String javaFilePath;
-	int variableCounter = 0;
+	String auxVariablePrefix = "__X";
+	int auxVariableIndex = 0;
 	
 	public static void main(String[] args) throws Exception {
 		String[] sourceDir = new String[]{"/home/mohsen/git/runningexample/src"};
@@ -48,6 +49,7 @@ public class JavaClassNormalizer {
 		CompilationUnit compilationUnit = astHelper.getCompilationUnit();
 		MethodDeclaration[] methods = ((TypeDeclaration)compilationUnit.types().get(0)).getMethods();
 		for (MethodDeclaration methodDeclaration : methods) {
+			auxVariableIndex = 0;
 			normalizeStatement(methodDeclaration.getBody());
 		}
 		astHelper.saveModifiedJavaFile();
@@ -137,14 +139,14 @@ public class JavaClassNormalizer {
 		String loopParameter = enhancedForStatement.getParameter().getName().toString();
 		String loopParameterType = enhancedForStatement.getParameter().getType().toString();
 		String normalizedWhileCode = "";
-		String x = "__X0";
-		astHelper.insertStatementBefore(enhancedForStatement, astHelper.parse("int " + x + " = 0;", ASTParser.K_STATEMENTS));
+		String auxVariable = auxVariablePrefix + auxVariableIndex;
+		astHelper.insertStatementBefore(enhancedForStatement, astHelper.parse("int " + auxVariable + " = 0;", ASTParser.K_STATEMENTS));
 		if(astHelper.getExpressionType(enhancedForStatement.getExpression()).isArray()){
-			normalizedWhileCode = "while(" + x + "<(" + enhancedForExpression + ").length){" + loopParameterType + " " + loopParameter 
-					+ " = (" + enhancedForExpression + ")[" + x + "];" + x + "++;" + enhancedForStatement.getBody().toString() + "}"; 
+			normalizedWhileCode = "while(" + auxVariable + "<(" + enhancedForExpression + ").length){" + loopParameterType + " " + loopParameter 
+					+ " = (" + enhancedForExpression + ")[" + auxVariable + "];" + auxVariable + "++;" + enhancedForStatement.getBody().toString() + "}"; 
 		}else{
-			normalizedWhileCode = "while(" + x + "<(" + enhancedForExpression + ").size()){" + loopParameterType + " " + loopParameter 
-					+ " = (" + enhancedForExpression + ").get(" + x + ");" + x + "++;" + enhancedForStatement.getBody().toString() + "}"; 
+			normalizedWhileCode = "while(" + auxVariable + "<(" + enhancedForExpression + ").size()){" + loopParameterType + " " + loopParameter 
+					+ " = (" + enhancedForExpression + ").get(" + auxVariable + ");" + auxVariable + "++;" + enhancedForStatement.getBody().toString() + "}"; 
 		}
 		astHelper.insertExpressionInsteadOf(enhancedForStatement, astHelper.parse(normalizedWhileCode, ASTParser.K_STATEMENTS));
 	}
