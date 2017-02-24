@@ -5,7 +5,6 @@ import java.util.List;
 import java.util.Stack;
 
 import org.eclipse.jdt.core.dom.ASTNode;
-import org.eclipse.jdt.core.dom.ASTParser;
 import org.eclipse.jdt.core.dom.Assignment;
 import org.eclipse.jdt.core.dom.Expression;
 import org.eclipse.jdt.core.dom.InfixExpression;
@@ -19,12 +18,12 @@ import org.eclipse.jdt.core.dom.VariableDeclarationFragment;
 import org.eclipse.jdt.core.dom.VariableDeclarationStatement;
 
 public class JavaExpressionNormalizer {
-	ASTHelper astHelper;
+	JavaFileHelper javaFileHelper;
 	int index;
 	private String auxVariablePrefix;
 	
-	public JavaExpressionNormalizer(ASTHelper astHelper, String auxVariablePrefix) {
-		this.astHelper = astHelper;
+	public JavaExpressionNormalizer(JavaFileHelper javaFileHelper, String auxVariablePrefix) {
+		this.javaFileHelper = javaFileHelper;
 		this.auxVariablePrefix = auxVariablePrefix;
 	}
 	
@@ -63,10 +62,10 @@ public class JavaExpressionNormalizer {
 				if(indexAndExpression[1] instanceof NullLiteral){
 					assignmentCode = "Object " + indexAndExpression[0] + " = " + indexAndExpression[1].toString() + ";";
 				}else{
-					assignmentCode = astHelper.getExpressionTypeName((Expression) indexAndExpression[1]) 
+					assignmentCode = javaFileHelper.getExpressionTypeName((Expression) indexAndExpression[1]) 
 							+ " " + indexAndExpression[0] + " = " + indexAndExpression[1].toString() + ";";
 				}
-				normalizedStatements.add(astHelper.parse(assignmentCode, ASTParser.K_STATEMENTS));
+				normalizedStatements.add(javaFileHelper.parseStatement(assignmentCode));
 			}
 		}
 		VariableDeclarationStatement variableDeclarationStatement = (VariableDeclarationStatement) normalizedStatements.get(0);
@@ -80,7 +79,7 @@ public class JavaExpressionNormalizer {
 	
 	private ASTNode normalizeMethodInvocation(Object[] indexAndExpression, Stack<Object[]> stack){
 		MethodInvocation methodInvocation = (MethodInvocation) indexAndExpression[1];
-		String generatedAssignment = astHelper.getExpressionTypeName(methodInvocation) 
+		String generatedAssignment = javaFileHelper.getExpressionTypeName(methodInvocation) 
 				+ " " + indexAndExpression[0] + " = ";
 		generatedAssignment += ((methodInvocation.getExpression()==null)?"":methodInvocation.getExpression().toString() + ".") + methodInvocation.getName() + "("; 
 		String separator = "";
@@ -96,12 +95,12 @@ public class JavaExpressionNormalizer {
 		}
 		generatedAssignment += ")";
 		generatedAssignment += ";";
-		return astHelper.parse(generatedAssignment, ASTParser.K_STATEMENTS);
+		return javaFileHelper.parseStatement(generatedAssignment);
 	}
 
 	private ASTNode normalizePostfixExpression(Object[] indexAndExpression, Stack<Object[]> stack){
 		PostfixExpression postfixExpression = (PostfixExpression) indexAndExpression[1];
-		String generatedAssignment = astHelper.getExpressionTypeName(postfixExpression) 
+		String generatedAssignment = javaFileHelper.getExpressionTypeName(postfixExpression) 
 				+ " " + indexAndExpression[0] + " = ";
 		Expression operand = postfixExpression.getOperand();
 		if(!isNormalized(operand)){
@@ -113,12 +112,12 @@ public class JavaExpressionNormalizer {
 		}
 		generatedAssignment += " " + postfixExpression.getOperator().toString();
 		generatedAssignment += ";";
-		return astHelper.parse(generatedAssignment, ASTParser.K_STATEMENTS);
+		return javaFileHelper.parseStatement(generatedAssignment);
 	}
 	
 	private ASTNode normalizePrefixExpression(Object[] indexAndExpression, Stack<Object[]> stack){
 		PrefixExpression prefixExpression = (PrefixExpression) indexAndExpression[1];
-		String generatedAssignment = astHelper.getExpressionTypeName(prefixExpression) 
+		String generatedAssignment = javaFileHelper.getExpressionTypeName(prefixExpression) 
 				+ " " + indexAndExpression[0] + " = ";
 		Expression operand = prefixExpression.getOperand();
 		generatedAssignment += prefixExpression.getOperator().toString() + " ";
@@ -130,12 +129,12 @@ public class JavaExpressionNormalizer {
 			generatedAssignment += operand.toString();
 		}
 		generatedAssignment += ";";
-		return astHelper.parse(generatedAssignment, ASTParser.K_STATEMENTS);
+		return javaFileHelper.parseStatement(generatedAssignment);
 	}
 	
 	private ASTNode normalizeInfixExpresion(Object[] indexAndExpression, Stack<Object[]> stack){
 		InfixExpression infixExpression = (InfixExpression) indexAndExpression[1];
-		String generatedAssignment = astHelper.getExpressionTypeName(infixExpression) 
+		String generatedAssignment = javaFileHelper.getExpressionTypeName(infixExpression) 
 				+ " " + indexAndExpression[0] + " = ";
 		Expression leftOperand = infixExpression.getLeftOperand();
 		if(!isNormalized(leftOperand)){
@@ -155,7 +154,7 @@ public class JavaExpressionNormalizer {
 			generatedAssignment += rightOperand.toString();
 		}
 		generatedAssignment += ";";
-		return astHelper.parse(generatedAssignment, ASTParser.K_STATEMENTS);
+		return javaFileHelper.parseStatement(generatedAssignment);
 	}
 	
 //	private boolean isCompound(Expression operand) {
@@ -165,6 +164,6 @@ public class JavaExpressionNormalizer {
 //	}
 //	
 	private boolean isNormalized(Expression expression){
-		return !astHelper.hasMethodInvokation(expression);
+		return !javaFileHelper.hasMethodInvokation(expression);
 	}
 }

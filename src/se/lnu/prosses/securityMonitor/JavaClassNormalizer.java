@@ -1,8 +1,8 @@
 package se.lnu.prosses.securityMonitor;
 
 import java.util.List;
+
 import org.eclipse.jdt.core.dom.ASTNode;
-import org.eclipse.jdt.core.dom.ASTParser;
 import org.eclipse.jdt.core.dom.Assignment;
 import org.eclipse.jdt.core.dom.Block;
 import org.eclipse.jdt.core.dom.CompilationUnit;
@@ -24,35 +24,33 @@ import org.eclipse.jdt.core.dom.WhileStatement;
 
 public class JavaClassNormalizer {
 
-	ASTHelper astHelper;
+	JavaFileHelper javaFileHelper;
 	JavaExpressionNormalizer javaExpressionNormalizer;
-	String javaFilePath;
 	String auxVariablePrefix = "__X";
 	int auxVariableIndex = 0;
 	
-	public static void main(String[] args) throws Exception {
-		String[] sourceDir = new String[]{"/home/mohsen/git/runningexample/src"};
-		String[] classPath = new String[]{"/home/mohsen/git/runningexample/src", "/home/mohsen/git/stsextractor/src"};
-		String javaFilePath = "/home/mohsen/git/runningexample/src/se/lnu/A.java";
-		JavaClassNormalizer classNormalizer = new JavaClassNormalizer(sourceDir, classPath, javaFilePath);
-		classNormalizer.normalize();
+	public JavaClassNormalizer(String sourcePath, String[] classPath, String javaFilePath) throws Exception {
+		CommentProcessor.process(javaFilePath);
+		javaFileHelper = new JavaFileHelper(sourcePath, classPath, javaFilePath, null);
+		javaFileHelper.load();
+		javaExpressionNormalizer = new JavaExpressionNormalizer(javaFileHelper, auxVariablePrefix);
 	}
 	
-	public JavaClassNormalizer(String[] sourceDir, String[] classPath, String javaFilePath) throws Exception {
-		CommentProcessor.process(javaFilePath);
-		astHelper = new ASTHelper(sourceDir, classPath, javaFilePath);
-		javaExpressionNormalizer = new JavaExpressionNormalizer(astHelper, auxVariablePrefix);
-		this.javaFilePath = javaFilePath;
+	public JavaClassNormalizer(JavaFileHelper javaFileHelper) throws Exception {
+		CommentProcessor.process(javaFileHelper.getJavaFilePath());
+		this.javaFileHelper = javaFileHelper;
+		javaFileHelper.load();
+		javaExpressionNormalizer = new JavaExpressionNormalizer(javaFileHelper, auxVariablePrefix);
 	}
 	
 	public void normalize() throws Exception {
-		CompilationUnit compilationUnit = astHelper.getCompilationUnit();
+		CompilationUnit compilationUnit = javaFileHelper.getCompilationUnit();
 		MethodDeclaration[] methods = ((TypeDeclaration)compilationUnit.types().get(0)).getMethods();
 		for (MethodDeclaration methodDeclaration : methods) {
 			auxVariableIndex = 0;
 			normalizeStatement(methodDeclaration.getBody());
 		}
-		astHelper.saveModifiedJavaFile();
+		javaFileHelper.saveModifiedJavaFile();
 	}
 	
 
@@ -103,39 +101,39 @@ public class JavaClassNormalizer {
 
 	private void normalizeExpressionStatement(ExpressionStatement expressionStatement) throws Exception {
 		List<ASTNode> normalizedExpression = javaExpressionNormalizer.normalize(expressionStatement.getExpression(), auxVariableIndex);	
-		astHelper.insertStatementsExceptFirstBefore(expressionStatement, normalizedExpression);
+		javaFileHelper.insertStatementsExceptFirstBefore(expressionStatement, normalizedExpression);
 		ASTNode normalizedAssignment = null;
 		if(expressionStatement.getExpression() instanceof Assignment){
 			normalizedAssignment = normalizedExpression.get(0);
 		}else{
-			normalizedAssignment = astHelper.parse(normalizedExpression.get(0).toString() + ";", ASTParser.K_STATEMENTS);
+			normalizedAssignment = javaFileHelper.parseStatement(normalizedExpression.get(0).toString() + ";");
 		}
-		astHelper.insertExpressionInsteadOf(expressionStatement, normalizedAssignment);
+		javaFileHelper.insertExpressionInsteadOf(expressionStatement, normalizedAssignment);
 	}
 
 	private void normalizeVariabledeclarationStatement(VariableDeclarationStatement variableDeclarationStatement) throws Exception {
 		for (Object fragment : variableDeclarationStatement.fragments()) {
 			VariableDeclarationFragment variableDeclarationFragment = (VariableDeclarationFragment)fragment;
 			List<ASTNode> normalizedInitializer = javaExpressionNormalizer.normalize(variableDeclarationFragment.getInitializer(), auxVariableIndex);
-			astHelper.insertStatementsExceptFirstBefore(variableDeclarationStatement, normalizedInitializer);
+			javaFileHelper.insertStatementsExceptFirstBefore(variableDeclarationStatement, normalizedInitializer);
 			String assignmentCode = variableDeclarationStatement.getType().toString() + " " 
 					+ variableDeclarationFragment.getName() + " = " + normalizedInitializer.get(0).toString() + ";";
-			astHelper.insertStatementBefore(variableDeclarationStatement, astHelper.parse(assignmentCode, ASTParser.K_STATEMENTS));
+			javaFileHelper.insertStatementBefore(variableDeclarationStatement, javaFileHelper.parseStatement(assignmentCode));
 		}
-		astHelper.removeStatement(variableDeclarationStatement);
+		javaFileHelper.removeStatement(variableDeclarationStatement);
 	}
 	
 	private void normalizeEnhancedForStatement(EnhancedForStatement enhancedForStatement) throws Exception {	
 		List<ASTNode> normalizedExpression = javaExpressionNormalizer.normalize(enhancedForStatement.getExpression(), auxVariableIndex);
 		String enhancedForExpression = normalizedExpression.get(0).toString();
-		astHelper.insertStatementsExceptFirstBefore(enhancedForStatement, normalizedExpression);
+		javaFileHelper.insertStatementsExceptFirstBefore(enhancedForStatement, normalizedExpression);
 		normalizeStatement(enhancedForStatement.getBody());
 		String loopParameter = enhancedForStatement.getParameter().getName().toString();
 		String loopParameterType = enhancedForStatement.getParameter().getType().toString();
 		String normalizedWhileCode = "";
 		String auxVariable = auxVariablePrefix + auxVariableIndex;
-		astHelper.insertStatementBefore(enhancedForStatement, astHelper.parse("int " + auxVariable + " = 0;", ASTParser.K_STATEMENTS));
-		if(astHelper.getExpressionType(enhancedForStatement.getExpression()).isArray()){
+		javaFileHelper.insertStatementBefore(enhancedForStatement, javaFileHelper.parseStatement("int " + auxVariable + " = 0;"));
+		if(javaFileHelper.getExpressionType(enhancedForStatement.getExpression()).isArray()){
 			normalizedWhileCode = "while(" + auxVariable + "<(" + enhancedForExpression + ").length){" + loopParameterType + " " + loopParameter 
 					+ " = (" + enhancedForExpression + ")[" + auxVariable + "];" + auxVariable + "++;" + enhancedForStatement.getBody().toString() 
 					+ "se.lnu.DummyMethods.monitorablePoint();}"; 
@@ -144,13 +142,13 @@ public class JavaClassNormalizer {
 					+ " = (" + enhancedForExpression + ").get(" + auxVariable + ");" + auxVariable + "++;" + enhancedForStatement.getBody().toString() 
 					+ "se.lnu.DummyMethods.monitorablePoint();}"; 
 		}
-		astHelper.insertExpressionInsteadOf(enhancedForStatement, astHelper.parse(normalizedWhileCode, ASTParser.K_STATEMENTS));
+		javaFileHelper.insertExpressionInsteadOf(enhancedForStatement, javaFileHelper.parseStatement(normalizedWhileCode));
 	}
 
 	private void normalizeSwitchStatement(SwitchStatement switchStatement) throws Exception {
 		List<ASTNode> normalizedExpression = javaExpressionNormalizer.normalize(switchStatement.getExpression(), auxVariableIndex);
 		String switchVariable = normalizedExpression.get(0).toString();
-		astHelper.insertStatementsExceptFirstBefore(switchStatement, normalizedExpression);
+		javaFileHelper.insertStatementsExceptFirstBefore(switchStatement, normalizedExpression);
 		@SuppressWarnings("unchecked")
 		List<Statement> switchStatements = switchStatement.statements();
 		boolean firstSwitchCase = true;
@@ -176,10 +174,10 @@ public class JavaClassNormalizer {
 					}
 				}
 				blockCode += "}";
-				normalizedIfCode += astHelper.parse(blockCode, ASTParser.K_STATEMENTS).toString() + "}";
+				normalizedIfCode += javaFileHelper.parseStatement(blockCode).toString() + "}";
 			}
 		}
-		astHelper.insertExpressionInsteadOf(switchStatement, astHelper.parse(normalizedIfCode, ASTParser.K_STATEMENTS));
+		javaFileHelper.insertExpressionInsteadOf(switchStatement, javaFileHelper.parseStatement(normalizedIfCode));
 	}
 
 	@SuppressWarnings("unchecked")
@@ -188,11 +186,11 @@ public class JavaClassNormalizer {
 		List<VariableDeclarationExpression> initializers = forStatement.initializers();
 		for (VariableDeclarationExpression initializer : initializers) {
 			List<ASTNode> normalizedInitializer = javaExpressionNormalizer.normalize(initializer, auxVariableIndex);
-			astHelper.insertStatementsExceptFirstBefore(forStatement, normalizedInitializer);
+			javaFileHelper.insertStatementsExceptFirstBefore(forStatement, normalizedInitializer);
 		}
 //		normalize the condition expression and paste its normalized statements before the statement for
 		List<ASTNode> normalizedExpression = javaExpressionNormalizer.normalize(forStatement.getExpression(), auxVariableIndex);
-		astHelper.insertStatementsExceptFirstBefore(forStatement, normalizedExpression);
+		javaFileHelper.insertStatementsExceptFirstBefore(forStatement, normalizedExpression);
 //		normalize the body
 		normalizeStatement(forStatement.getBody());
 //		generate the statement while and replace it with the statement for
@@ -206,7 +204,7 @@ public class JavaClassNormalizer {
 			}
 		}
 		whileCode += "se.lnu.DummyMethods.monitorablePoint();}";
-		astHelper.insertExpressionInsteadOf(forStatement, astHelper.parse(whileCode, ASTParser.K_STATEMENTS));
+		javaFileHelper.insertExpressionInsteadOf(forStatement, javaFileHelper.parseStatement(whileCode));
 	}
 	
 	private void normalizeDoStatement(DoStatement doStatement) throws Exception {
@@ -216,8 +214,8 @@ public class JavaClassNormalizer {
 //		normalize the body
 		normalizeStatement(body);
 //		paste one copy of the body and normalized statements that come from the condition expression before the extra while
-		astHelper.insertStatementBefore(doStatement, body);
-		astHelper.insertStatementsExceptFirstBefore(doStatement, normalizedExpression);
+		javaFileHelper.insertStatementBefore(doStatement, body);
+		javaFileHelper.insertStatementsExceptFirstBefore(doStatement, normalizedExpression);
 //		generate the extra while and replace it with the do statement
 		String normalizedWhileCode = "while (" + normalizedExpression.get(0).toString() + "){" + body.toString();
 		for (int i=normalizedExpression.size()-1; i>0; i--) {
@@ -226,30 +224,30 @@ public class JavaClassNormalizer {
 			normalizedWhileCode += variableDeclarationFragment.getName() + " = " + variableDeclarationFragment.getInitializer() + ";";
 		}
 		normalizedWhileCode += "se.lnu.DummyMethods.monitorablePoint();}";
-		WhileStatement whileStatement = (WhileStatement) astHelper.parse(normalizedWhileCode, ASTParser.K_STATEMENTS);
-		astHelper.insertExpressionInsteadOf(doStatement, whileStatement);
+		WhileStatement whileStatement = (WhileStatement) javaFileHelper.parseStatement(normalizedWhileCode);
+		javaFileHelper.insertExpressionInsteadOf(doStatement, whileStatement);
 	}
 
 	private void normalizeWhileStatement(WhileStatement whileStatement) throws Exception {
 //		normalize the condition
 		List<ASTNode> normalizedExpression = javaExpressionNormalizer.normalize(whileStatement.getExpression(), auxVariableIndex);
-		astHelper.insertExpressionInsteadOf(whileStatement.getExpression(), normalizedExpression.get(0));
-		astHelper.insertStatementsExceptFirstBefore(whileStatement, normalizedExpression);
+		javaFileHelper.insertExpressionInsteadOf(whileStatement.getExpression(), normalizedExpression.get(0));
+		javaFileHelper.insertStatementsExceptFirstBefore(whileStatement, normalizedExpression);
 //		normalize body
 		normalizeStatement(whileStatement.getBody());
 //		inject a dummy monitorable point at after the last statement of the body
 		@SuppressWarnings("rawtypes")
 		List statements = ((Block)whileStatement.getBody()).statements();
 		if(statements.size()>0){
-			astHelper.insertStatementAfter((Statement)statements.get(statements.size()-1), astHelper.parse("se.lnu.DummyMethods.monitorablePoint();", ASTParser.K_STATEMENTS));
+			javaFileHelper.insertStatementAfter((Statement)statements.get(statements.size()-1), javaFileHelper.parseStatement("se.lnu.DummyMethods.monitorablePoint();"));
 		}
 	}
 
 	private void normalizeIfStatement(IfStatement ifStatement) throws Exception {
 //		normalize condition
 		List<ASTNode> normalizedExpression = javaExpressionNormalizer.normalize(ifStatement.getExpression(), auxVariableIndex);
-		astHelper.insertExpressionInsteadOf(ifStatement.getExpression(), normalizedExpression.get(0));
-		astHelper.insertStatementsExceptFirstBefore(ifStatement, normalizedExpression);
+		javaFileHelper.insertExpressionInsteadOf(ifStatement.getExpression(), normalizedExpression.get(0));
+		javaFileHelper.insertStatementsExceptFirstBefore(ifStatement, normalizedExpression);
 //		normalize then part
 		normalizeStatement(ifStatement.getThenStatement());
 //		normalize else part

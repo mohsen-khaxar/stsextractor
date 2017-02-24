@@ -13,37 +13,48 @@ import org.eclipse.jdt.core.dom.Block;
 import org.eclipse.jdt.core.dom.CompilationUnit;
 import org.eclipse.jdt.core.dom.Expression;
 import org.eclipse.jdt.core.dom.ITypeBinding;
-import org.eclipse.jdt.core.dom.IfStatement;
+import org.eclipse.jdt.core.dom.MethodDeclaration;
 import org.eclipse.jdt.core.dom.MethodInvocation;
 import org.eclipse.jdt.core.dom.Statement;
-import org.eclipse.jdt.core.dom.VariableDeclarationStatement;
+import org.eclipse.jdt.core.dom.TypeDeclaration;
 import org.eclipse.jdt.core.dom.rewrite.ASTRewrite;
 import org.eclipse.jdt.core.dom.rewrite.ListRewrite;
 import org.eclipse.jface.text.Document;
 import org.eclipse.text.edits.TextEdit;
 
-public class ASTHelper {
+public class JavaFileHelper {
 	
-	String[] sourceDir;
+	JavaProjectHelper parent;
+	String[] sourcePath;
 	String[] classPath;
 	String javaFilePath;
 	CompilationUnit compilationUnit;
 	ASTRewrite astRewrite;
 	
+	public JavaFileHelper(String sourcePath, String[] classPath, String javaFilePath, JavaProjectHelper parent) {
+		this.sourcePath = new String[]{sourcePath};
+		this.classPath = classPath;
+		this.javaFilePath = javaFilePath;
+		this.parent = parent;
+	}
+	
 	public CompilationUnit getCompilationUnit(){
 		return compilationUnit;
 	}
 	
-	public ASTHelper(String[] sourceDir, String[] classPath, String javaFilePath) {
-		this.sourceDir = sourceDir;
-		this.classPath = classPath;
-		this.javaFilePath = javaFilePath;
-		this.compilationUnit = buildCompilationUnit();
-		AST ast = compilationUnit.getAST();
-		this.astRewrite = ASTRewrite.create(ast);
+	public String getJavaFilePath(){
+		return this.javaFilePath;
 	}
 	
-	private CompilationUnit buildCompilationUnit() {
+	public String getQualifiedClassName(){
+		String qualifiedClassName = null;
+		if(compilationUnit.types().size()>0 && !((TypeDeclaration)compilationUnit.types().get(0)).isInterface()){
+			qualifiedClassName = ((TypeDeclaration)compilationUnit.types().get(0)).resolveBinding().getQualifiedName();
+		}
+		return qualifiedClassName;
+	}
+	
+	public void load() {
 		ASTParser parser = ASTParser.newParser(AST.JLS4);
 		parser.setResolveBindings(true);
 		parser.setKind(ASTParser.K_COMPILATION_UNIT);
@@ -53,20 +64,19 @@ public class ASTHelper {
 		parser.setCompilerOptions(options);
 		parser.setSource(Utils.readTextFile(javaFilePath));
 		parser.setUnitName(new File(javaFilePath).getName());
-		parser.setEnvironment(classPath, sourceDir, new String[] { "UTF-8"}, true);
+		parser.setEnvironment(classPath, sourcePath, new String[] { "UTF-8"}, true);
 		CompilationUnit compilationUnit = (CompilationUnit) parser.createAST(null);
-		return compilationUnit;
+		this.compilationUnit = compilationUnit;
+		AST ast = compilationUnit.getAST();
+		this.astRewrite = ASTRewrite.create(ast);
 	}
 	
-	public ASTNode parse(String code, int type) {
+	public ASTNode parseStatement(String code) {
 		ASTParser parser = ASTParser.newParser(AST.JLS4);
 		parser.setSource(code.toCharArray());
-		parser.setKind(type);
+		parser.setKind(ASTParser.K_STATEMENTS);
 		ASTNode res = parser.createAST(null);
-		if(type==ASTParser.K_STATEMENTS){
-			res = (ASTNode) ((Block)res).statements().get(0);
-		}
-		return res;
+		return (ASTNode) ((Block)res).statements().get(0);
 	}
 	
 	static Boolean has = false;
@@ -80,19 +90,6 @@ public class ASTHelper {
 			}
 		});
 		return has;
-	}
-	
-	static String type = "";
-	public String getType(final String nodeString, ASTNode origin){
-		origin.accept(new ASTVisitor() {
-			@Override
-			public void preVisit(ASTNode node) {
-				if(node.toString().equals(nodeString)){
-					type = ((Expression)node).resolveTypeBinding().getQualifiedName();
-				}
-			}
-		});
-		return type;
 	}
 	
 	public String getExpressionTypeName(Expression expression){
@@ -172,5 +169,14 @@ public class ASTHelper {
 	public void insertStatementsExceptFirstBefore(ASTNode insertionPoint, List<ASTNode> insertingNodes) throws Exception {
 		insertStatementsBefore(insertionPoint, insertingNodes, 1, insertingNodes.size()-1);
 		
+	}
+
+	public String getQualifiedName(ASTNode astNode) {
+		String qualiofiedName = "";
+		if(astNode instanceof MethodDeclaration){
+			qualiofiedName = ((MethodDeclaration) astNode).resolveBinding().getDeclaringClass().getQualifiedName() 
+					+ "." + ((MethodDeclaration) astNode).getName();
+		}
+		return qualiofiedName;
 	}
 }

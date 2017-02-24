@@ -18,7 +18,7 @@ public class Main {
 		entryPoints.add(".*\\.main");
 		controllableMethodNames.add("se.lnu.CaseStudy.estimatLocation");
 
-		STSExtractor stsExtractor = new STSExtractor(includingFilter, excludingFilter , entryPoints, controllableMethodNames);
+		JavaProjectSTSExtractor stsExtractor = new JavaProjectSTSExtractor(includingFilter, excludingFilter , entryPoints, controllableMethodNames);
 		stsExtractor.extract(directoryPath, classPath, controllableMethodNames);
 		stsExtractor.sts.propagateInitialValues();
 		stsExtractor.sts.saveAsDot(directoryPath + File.separator + "model.dot");

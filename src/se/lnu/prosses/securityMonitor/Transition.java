@@ -4,9 +4,9 @@ import org.jgrapht.graph.DefaultEdge;
 
 @SuppressWarnings("serial")
 public class Transition extends DefaultEdge {
-	String event;
+	String action;
 	String guard;
-	String upadater;
+	String update;
 	static final public String TAU = "TAU";
 	public static final String START = "START";
 	public static final String RETURN = "RETURN";
@@ -16,18 +16,18 @@ public class Transition extends DefaultEdge {
 		
 	}
 	
-	public Transition(String event,	String guard, String upadater){
-		this.event = event;
+	public Transition(String action, String guard, String update){
+		this.action = action;
 		this.guard = guard;
-		this.upadater = upadater;
+		this.update = update;
 	}
 
-	public String getEvent() {
-		return event;
+	public String getAction() {
+		return action;
 	}
 
-	public void setEvent(String event) {
-		this.event = event;
+	public void setAction(String action) {
+		this.action = action;
 	}
 
 	public String getGuard() {
@@ -38,17 +38,21 @@ public class Transition extends DefaultEdge {
 		this.guard = guard;
 	}
 
-	public String getUpdater() {
-		return upadater;
+	public String getUpdate() {
+		return update;
 	}
 
-	public void setUpadater(String upadater) {
-		this.upadater = upadater;
+	public void setUpdate(String update) {
+		this.update = update;
 	}
 	
 	@Override
 	public String toString() {
-		return event + " (" + guard.replaceAll("\"", "'") + ") [" + upadater.replaceAll("\"", "'") + "]";
+		return "<" + action + ", " + guard.replaceAll("\"", "'") + ", " + update.replaceAll("\"", "'") + ">";
+	}
+	
+	public String toFullString() {
+		return "[" + this.getSource() + "->" + this.getTarget() + "] : <" + action + ", " + guard.replaceAll("\"", "'") + ", " + update.replaceAll("\"", "'") + ">";
 	}
 
 }

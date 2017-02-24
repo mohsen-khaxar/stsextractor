@@ -42,7 +42,8 @@ import org.eclipse.jdt.core.dom.VariableDeclarationStatement;
 import org.eclipse.jdt.core.dom.WhileStatement;
 //import org.project.automaton.Automaton;
 
-public class STSExtractor {
+public class JavaProjectSTSExtractor {
+	JavaProjectHelper javaProjectHelper;
 	int newLocation = 2;
 	int pcLevel = 0;
 	int maxPcLevel = 0;
@@ -51,9 +52,10 @@ public class STSExtractor {
 	public ArrayList<String> excludingFilter;
 	public ArrayList<String> entryPoints;
 	public STS sts;
+	public int scopeId = 0;
 	private Hashtable<String, TypeDeclaration> classes = new Hashtable<>();
 	final static String DUMMY_METHOD = "se.lnu.SL.def";
-	public STSExtractor(ArrayList<String> includingFilter, ArrayList<String> excludingFilter, ArrayList<String> entryPoints, Set<String> controllableMethodNames) {
+	public JavaProjectSTSExtractor(ArrayList<String> includingFilter, ArrayList<String> excludingFilter, ArrayList<String> entryPoints, Set<String> controllableMethodNames) {
 		blocks = new Hashtable<>();
 		this.includingFilter = includingFilter;
 		this.excludingFilter = excludingFilter;
@@ -145,23 +147,23 @@ public class STSExtractor {
 			Set<Transition> transitions = new HashSet<>();
 			transitions.addAll(res.edgeSet());
 			for (Transition transition : transitions) {
-				if(res.controllableEvents.contains(transition.getEvent()) && !transition.getEvent().equals(Transition.START)
-						&& !transition.getEvent().equals(Transition.RETURN) && !transition.getEvent().equals(Transition.PARAMETER)){
+				if(res.controllableEvents.contains(transition.getAction()) && !transition.getAction().equals(Transition.START)
+						&& !transition.getAction().equals(Transition.RETURN) && !transition.getAction().equals(Transition.PARAMETER)){
 					String guard = "";
 					String separator = "";
-					if(securityGuards.get(transition.getEvent().replaceAll("\\s", "")+",-1")!=null){
-						guard = securityGuards.get(transition.getEvent().replaceAll("\\s", "")+",-1");
+					if(securityGuards.get(transition.getAction().replaceAll("\\s", "")+",-1")!=null){
+						guard = securityGuards.get(transition.getAction().replaceAll("\\s", "")+",-1");
 						separator = " or ";
 					}
-					if(securityGuards.get(transition.getEvent().replaceAll("\\s", "")+","+res.getEdgeSource(transition))!=null){
-						guard += separator + securityGuards.get(transition.getEvent().replaceAll("\\s", "")+","+res.getEdgeSource(transition));
+					if(securityGuards.get(transition.getAction().replaceAll("\\s", "")+","+res.getEdgeSource(transition))!=null){
+						guard += separator + securityGuards.get(transition.getAction().replaceAll("\\s", "")+","+res.getEdgeSource(transition));
 					}
 					if(guard.equals("")){
 						guard = "false";
 					}
 					if(!guard.matches("(true|\\sand\\s|\\sor\\s|\\s)*")){
 						transition.setGuard(guard);
-						Transition insecureTransition = new Transition(transition.getEvent(), " not (" + guard.replaceAll("\\s+", " ") + ")", transition.upadater);
+						Transition insecureTransition = new Transition(transition.getAction(), " not (" + guard.replaceAll("\\s+", " ") + ")", transition.update);
 						if(!res.vertexSet().contains(-res.getEdgeTarget(transition))){
 							res.addVertex(-res.getEdgeTarget(transition));
 						}
@@ -169,7 +171,7 @@ public class STSExtractor {
 						Transition returnTransition = new Transition(Transition.RETURN, "true", "");
 						res.addEdge(-res.getEdgeTarget(transition), res.getEdgeTarget(transition), returnTransition);
 						
-						((Transition)(res.incomingEdgesOf(res.getEdgeSource(transition)).toArray()[0])).setEvent(Transition.PARAMETER);
+						((Transition)(res.incomingEdgesOf(res.getEdgeSource(transition)).toArray()[0])).setAction(Transition.PARAMETER);
 					}
 				}
 			}
@@ -184,7 +186,7 @@ public class STSExtractor {
 	}
 	
 	public static void main(String[] args) {
-		STSExtractor se = new STSExtractor(null, null, null, null);
+		JavaProjectSTSExtractor se = new JavaProjectSTSExtractor(null, null, null, null);
 		
 	}
 	
@@ -192,54 +194,17 @@ public class STSExtractor {
 		sts.generateAspect(sourcePath, targetPath);
 	}
 	
-	void getClasses(String directoryPath, String[] classPath) throws Exception{
-		String[] sourceDir = new String[]{directoryPath};
-		ArrayList<String> javaFilePaths = getAllJavaFilePaths(directoryPath);
-		for (String javaFilePath : javaFilePaths) {
-			JavaNormalizerOld javaNormalizer = new JavaNormalizerOld();
-			javaNormalizer.normalize(sourceDir, classPath, javaFilePath);
-			CompilationUnit compilationUnit = getCompilationUnit(sourceDir, classPath, javaFilePath);
-			if(compilationUnit.types().size()>0&&!((TypeDeclaration)compilationUnit.types().get(0)).isInterface()){
-				classes.put(((TypeDeclaration)compilationUnit.types().get(0)).resolveBinding().getQualifiedName(), ((TypeDeclaration)compilationUnit.types().get(0)));
-			}
-		}
-	}
-	
-	void removeTemporaryFiles(String directoryPath){
-		ArrayList<String> javaFilePaths = getAllJavaFilePaths(directoryPath);
-		for (String javaFilePath : javaFilePaths) {
-			new File(javaFilePath).delete();
-			new File(javaFilePath + "_").renameTo(new File(javaFilePath));
-		}
-	}
-	
-	public void extract(String directoryPath, String[] classPath, Set<String> controllableMethodNames) throws Exception{
-		sts.controllableMethodNames = controllableMethodNames;
-		getClasses(directoryPath, classPath);
-		for (TypeDeclaration cls : classes.values()) {
-			extractForAClass(cls);
+	public void extract(String sourcePath, String[] classPath) throws Exception{
+		javaProjectHelper = new JavaProjectHelper(sourcePath, classPath);
+		javaProjectHelper.load();
+		for (JavaFileHelper javaFileHelper : javaProjectHelper.getAllJavaFileHelpers()) {
+			JavaClassSTSExtractor javaClassSTSExtractor = new JavaClassSTSExtractor(javaFileHelper, this);
+			javaClassSTSExtractor.extract();
+			extractForAClass(javaFileHelper);
 		}
 		addImplicitIndirectSecurityAssignments();
-		removeTemporaryFiles(directoryPath);
+		javaProjectHelper.recoverOriginalJavaFiles();
 		System.out.println("DONE.");
-//		sts.saveAsDot(directoryPath + File.separator + "model.dot");
-//		Automaton automaton = sts.convertToAutomaton();
-//		FileWriter fileWriter = new FileWriter(directoryPath + File.separator + "vars.txt");
-//		List<Variable> vars = automaton.getVariables();
-//		for (Variable variable : vars) {
-//			fileWriter.write(variable.getName() + "\n");
-//		}
-//		fileWriter.close();
-//		STS controlledSTS = generateControlledSTS();
-//		controlledSTS.saveAsDot("/home/mohsen/aspects/modelc.dot");
-//		controlledSTS = controlledSTS.convertToUncontrollableFreeSTS();
-//		controlledSTS.saveAsDot("/home/mohsen/aspects/freemodelc.dot");
-//		controlledSTS.generateAspect(directoryPath, "/home/mohsen/aspects");
-//		String reax = sts.convertToReax();
-//		System.out.println(reax);
-//		STS uncontrollableFreeSTS = sts.convertToUncontrollableFreeSTS();
-//		uncontrollableFreeSTS.saveAsDot(directoryPath + File.separator + "freemodel.dot");
-//		uncontrollableFreeSTS.generateAspect(directoryPath, "P:\\aspects");
 	}
 	
 	private void addImplicitIndirectSecurityAssignments() {
@@ -257,7 +222,7 @@ public class STSExtractor {
 					for (Transition transition : outgoingTransitions) {
 						for (Transition transition2 : possibleModifieds.keySet()) {
 							if(!transition.equals(transition2)){
-								transition.setUpadater(getImplicitIndirectSecurityAssignment(possibleModifieds.get(transition2)) + transition.getUpdater());
+								transition.setUpdate(getImplicitIndirectSecurityAssignment(possibleModifieds.get(transition2)) + transition.getUpdate());
 //								for (Transition transition3 : sts.outgoingEdgesOf(sts.getEdgeTarget(transition))) {
 //									transition3.setUpadater(getImplicitIndirectSecurityAssignment(possibleModifieds.get(transition2)) + transition3.getUpdater());
 //								}
@@ -274,8 +239,8 @@ public class STSExtractor {
 						}
 					}
 					for (Transition transition : possibleModifieds.keySet()) {
-						sts.getEdge(location, blocks.get(-location)).setUpadater(getImplicitIndirectSecurityAssignment(possibleModifieds.get(transition)) 
-								+ sts.getEdge(location, blocks.get(-location)).getUpdater());
+						sts.getEdge(location, blocks.get(-location)).setUpdate(getImplicitIndirectSecurityAssignment(possibleModifieds.get(transition)) 
+								+ sts.getEdge(location, blocks.get(-location)).getUpdate());
 //						for (Transition transition2 : sts.outgoingEdgesOf(blocks.get(-location))) {
 //							transition2.setUpadater(getImplicitIndirectSecurityAssignment(possibleModifieds.get(transition)) + transition2.getUpdater());
 //						}
@@ -305,10 +270,10 @@ public class STSExtractor {
 			for (Transition transition : sts.outgoingEdgesOf(location)) {
 				boolean has = false;
 				for (String variable : variables) {
-					String updater = transition.getUpdater();
+					String updater = transition.getUpdate();
 					if(updater.matches("LIC_"+variable + "\\s*=\\s*false")
 							|| updater.matches("LII_"+variable + "\\s*=\\s*true")){
-						transition.setUpadater(updater.replaceAll("(LIC_"+variable + "\\s*=\\s*false\\s*;)|"+"(LII_"+variable + "\\s*=\\s*true\\s*;)", ""));
+						transition.setUpdate(updater.replaceAll("(LIC_"+variable + "\\s*=\\s*false\\s*;)|"+"(LII_"+variable + "\\s*=\\s*true\\s*;)", ""));
 						has = true;
 					}
 				}
@@ -432,7 +397,7 @@ public class STSExtractor {
 //				possibleModifiedVariables.add(upadaterPart.split("=")[0]);
 //			}
 //		}
-		executionPathes.put(sts.getEdgeTarget(transition), new String[]{transition.getGuard(), transition.getUpdater()});
+		executionPathes.put(sts.getEdgeTarget(transition), new String[]{transition.getGuard(), transition.getUpdate()});
 		Queue<Integer> queue = new LinkedList<Integer>();
 		if(!exitLocations.contains(sts.getEdgeTarget(transition))){
 			queue.add(sts.getEdgeTarget(transition));
@@ -444,7 +409,7 @@ public class STSExtractor {
 				for (Transition outgoingTransition : outgoingTransitions) {
 					String[] temp = new String[2];
 					temp[0] = "(" + executionPathes.get(location)[0] + ") and (" + getWeakestPrecondition(executionPathes.get(location)[0], executionPathes.get(location)[1]) + ")";
-					temp[1] = executionPathes.get(location)[1] + outgoingTransition.getUpdater();
+					temp[1] = executionPathes.get(location)[1] + outgoingTransition.getUpdate();
 					executionPathes.remove(location);
 					executionPathes.put(sts.getEdgeTarget(outgoingTransition), temp);
 					if(!exitLocations.contains(sts.getEdgeTarget(outgoingTransition))){
@@ -491,7 +456,7 @@ public class STSExtractor {
 			visited.add(location);
 			Set<Transition> outgoingTransitions = sts.outgoingEdgesOf(location);
 			for (Transition outgoingTransition : outgoingTransitions) {
-				res += outgoingTransition.getUpdater();
+				res += outgoingTransition.getUpdate();
 				if(!visited.contains(sts.getEdgeTarget(outgoingTransition))){
 					queue.add(sts.getEdgeTarget(outgoingTransition));
 				}
@@ -548,8 +513,8 @@ public class STSExtractor {
 		return blocks.get(-location)!=null;
 	}
 
-	private void extractForAClass(TypeDeclaration cls) throws Exception {
-		for (MethodDeclaration methodDeclaration : cls.getMethods()) {
+	private void extractForAClass(TypeDeclaration clazz) throws Exception {
+		for (MethodDeclaration methodDeclaration : clazz.getMethods()) {
 			String qualifiedMethodName = methodDeclaration.resolveBinding().getDeclaringClass().getQualifiedName() + "." + methodDeclaration.getName();
 			boolean matched = false;
 			for (String filter : entryPoints) {
@@ -567,143 +532,9 @@ public class STSExtractor {
 		}
 	}
 	
-	@SuppressWarnings("unchecked")
-	private Integer processMethod(MethodDeclaration methodDeclaration) {
-		List<Statement> statements = methodDeclaration.getBody().statements();
-		Integer location = newLocation();
-		String methodFullName = methodDeclaration.resolveBinding().getDeclaringClass().getQualifiedName().toString();
-		methodFullName += "." + methodDeclaration.getName().toString();
-		methodFullName = methodFullName.replaceAll("\\.", "_");
-		Transition transition = new Transition(methodFullName, "true", "");
-		sts.addVertex(location);
-		sts.addEdge(1, location, transition);
- 		String prefix = methodDeclaration.resolveBinding().getDeclaringClass().getQualifiedName().replaceAll("\\.", "_") + "_" + methodDeclaration.getName();
-		Hashtable<String, String> SL = new Hashtable<String, String>();
-		SL.put("PC,IC", "l");
-		SL.put("PC,II", "h");
-		sts.securityLabelling.put(1, "LIC_PC=false;LII_PC=true;");
-		Hashtable<String, String> RS = new Hashtable<String, String>();
-		for (Statement statement : statements) {
-			location = processStatement(statement, "", RS, location, prefix, new Hashtable<Integer, Integer>(), SL);
-		}
-		return location;
-	}
 	
-	private Integer processStatement(Statement statement, String XReturn, Hashtable<String, String> RS, Integer initialLocation, String prefix, Hashtable<Integer, Integer> breakContinueLocations, Hashtable<String, String> SL) {
-		if(initialLocation==59){
-			System.out.println(statement);
-		}
-		Integer finalLocation = initialLocation; 
-		switch(statement.getNodeType()){
-		case ASTNode.EXPRESSION_STATEMENT:
-			Expression expression = ((ExpressionStatement) statement).getExpression();
-			if(expression.getNodeType()==ASTNode.METHOD_INVOCATION && (((MethodInvocation) expression).resolveMethodBinding().getDeclaringClass().getQualifiedName() + "." + ((MethodInvocation) expression).getName()).equals(DUMMY_METHOD)){
-				MethodInvocation dummyMethodInvocation = (MethodInvocation) expression;
-				finalLocation = processDummyMethodInvocation(dummyMethodInvocation, XReturn, RS, initialLocation, prefix, breakContinueLocations, SL);
-			}else if((expression.getNodeType()==ASTNode.METHOD_INVOCATION || expression.getNodeType()==ASTNode.CLASS_INSTANCE_CREATION) 
-					&& canProcessMethod(expression)){
-				MethodInvocation methodInvocation = (MethodInvocation) expression;
-				finalLocation = processMethodInvocation(methodInvocation, XReturn, RS, initialLocation, prefix, breakContinueLocations, SL);
-			}else if(expression.getNodeType()==ASTNode.ASSIGNMENT){
-				Assignment assignment = (Assignment)expression;
-				finalLocation = processAssignment(assignment, XReturn, RS, initialLocation, prefix, breakContinueLocations, SL);
-			}
-			break;
-		case ASTNode.IF_STATEMENT:
-			IfStatement ifStatement = (IfStatement) statement;
-			finalLocation = processIfStatement(ifStatement, XReturn, RS, initialLocation, prefix, breakContinueLocations, SL);
-			break;
-		case ASTNode.WHILE_STATEMENT:
-			WhileStatement whileStatement = (WhileStatement) statement;
-			finalLocation = processWhileStatement(whileStatement, XReturn, RS, initialLocation, prefix, breakContinueLocations, SL);
-			break;
-		case ASTNode.RETURN_STATEMENT:
-			ReturnStatement returnStatement = (ReturnStatement) statement;
-			finalLocation = processReturnStatement(returnStatement, XReturn, RS, initialLocation, prefix, breakContinueLocations, SL);
-			break;
-		case ASTNode.TRY_STATEMENT:
-			TryStatement tryStatement = (TryStatement) statement;
-			finalLocation = processBlock(tryStatement.getBody(), XReturn, RS, initialLocation, prefix, breakContinueLocations, SL);
-			break;
-		case ASTNode.BLOCK:
-			Block block = (Block) statement;
-			finalLocation = processBlock(block, XReturn, RS, initialLocation, prefix, breakContinueLocations, SL);
-			break;
-		case ASTNode.BREAK_STATEMENT:
-			breakContinueLocations.put(finalLocation, 1);
-			break;
-		case ASTNode.CONTINUE_STATEMENT:
-			breakContinueLocations.put(finalLocation, -1);
-			break;
-		case ASTNode.VARIABLE_DECLARATION_STATEMENT:
-			VariableDeclarationStatement variableDeclarationStatement = (VariableDeclarationStatement) statement;
-			finalLocation = processVariableDeclarationFragment((VariableDeclarationFragment)variableDeclarationStatement.fragments().get(0), XReturn, RS, initialLocation, prefix, breakContinueLocations, SL);
-			break;
-		default:
-		}	
-		return finalLocation;
-	}
 
-	private Integer processDummyMethodInvocation(MethodInvocation dummyMethodInvocation, String XReturn, Hashtable<String, String> RS, Integer initialLocation, String prefix, Hashtable<Integer, Integer> breakContinueLocations, Hashtable<String, String> SL) {
-		 @SuppressWarnings("unchecked")
-		List<StringLiteral> parameters = dummyMethodInvocation.arguments();
-		 String variableName = "";
-		if(RS.contains(parameters.get(0).getLiteralValue())){
-			variableName = RS.get(parameters.get(0).getLiteralValue());
-		}else {
-			variableName = prefix + "_" + parameters.get(0).getLiteralValue().replaceAll("\\.", "_");
-		}
-		SL.put(variableName + "," + parameters.get(1).getLiteralValue(), parameters.get(2).getLiteralValue());
-		sts.securityLabelling.put(initialLocation, (sts.securityLabelling.get(initialLocation)==null ? "" : sts.securityLabelling.get(initialLocation)) 
-				+ "L" + parameters.get(1).getLiteralValue() + "_" + variableName + "=" + (parameters.get(2).getLiteralValue().equals("h") ? "true" : "false") + ";");
-		return initialLocation;
-	}
-
-	private Integer processVariableDeclarationFragment(VariableDeclarationFragment variableDeclarationFragment,	String XReturn, Hashtable<String, String> RS, Integer initialLocation, String prefix, Hashtable<Integer, Integer> breakContinueLocations, Hashtable<String, String> SL) {
-		Integer finalLocation = initialLocation;
-		if((variableDeclarationFragment.getInitializer() instanceof MethodInvocation || variableDeclarationFragment.getInitializer() instanceof ClassInstanceCreation) 
-				&& canProcessMethod(variableDeclarationFragment.getInitializer())){
-			Expression expression = ((Expression) variableDeclarationFragment.getInitializer());
-			String methodArgumentsUpdater = getMethodArgumentsUpdater(expression, RS, prefix);
-			for (String part : methodArgumentsUpdater.split(";")) {
-				if(!part.matches("\\s*")){
-					String leftHandSide = part.substring(0, part.indexOf("=")).replaceAll(" ", "");
-					SL.remove(leftHandSide + "," + "XC");
-					SL.remove(leftHandSide + "," + "IC");
-					SL.remove(leftHandSide + "," + "XI");
-					SL.remove(leftHandSide + "," + "II");
-				}
-			}
-			Transition transition = new Transition(Transition.TAU, "true", methodArgumentsUpdater + getSecurityAssignments(SL) 
-			+ getSecurityAssignment(methodArgumentsUpdater, "XC") + getSecurityAssignment(methodArgumentsUpdater, "XI") 
-			+ getSecurityAssignment(methodArgumentsUpdater.replaceAll(";", " && PC;"), "IC") + getSecurityAssignment(methodArgumentsUpdater.replaceAll(";", " && PC;"), "II"));
-			finalLocation = newLocation();
-			sts.addVertex(initialLocation);
-			sts.addVertex(finalLocation);
-			sts.addEdge(initialLocation, finalLocation, transition);
-			updateStsSecurityLabelling(initialLocation, finalLocation);
-			transition = new Transition(getMethodFullName(expression), "true", "");
-			initialLocation = finalLocation;
-			finalLocation = newLocation();
-			sts.addVertex(initialLocation);
-			sts.addVertex(finalLocation);
-			sts.addEdge(initialLocation, finalLocation, transition);
-			updateStsSecurityLabelling(initialLocation, finalLocation);
-			Hashtable<String, String> newRS = getRenamingRules(expression, prefix);
-			finalLocation = processBlock(getMethodBody(expression), rename(variableDeclarationFragment.getName(), newRS, prefix), newRS, finalLocation, getScopedName(expression, prefix), breakContinueLocations, SL);
-		}else if (variableDeclarationFragment.getInitializer()!=null){
-			String rename = rename(variableDeclarationFragment.getName(), RS, prefix) + "=" + rename(variableDeclarationFragment.getInitializer(), RS, prefix) + ";";
-			Transition transition = new Transition(Transition.TAU, "true", rename + 
-					getSecurityAssignments(SL) + getSecurityAssignment(rename, "XC") + getSecurityAssignment(rename, "XI") + 
-					getSecurityAssignment(rename.replaceAll(";", " && PC;"), "IC") + getSecurityAssignment(rename.replaceAll(";", " && PC;"), "II"));
-			finalLocation = newLocation();
-			sts.addVertex(initialLocation);
-			sts.addVertex(finalLocation);
-			sts.addEdge(initialLocation, finalLocation, transition);
-			updateStsSecurityLabelling(initialLocation, finalLocation);
-		};
-		return finalLocation;
-	}
+	
 	
 	private String getScopedName(Expression expression, String prefix){
 		String scopedName = "";
@@ -728,79 +559,9 @@ public class STSExtractor {
 		return methodFullName;
 	}
 
-	private Integer processReturnStatement(ReturnStatement returnStatement, String XReturn, Hashtable<String, String> RS, Integer initialLocation, String prefix, Hashtable<Integer, Integer> breakContinueLocations, Hashtable<String, String> SL) {
-		Integer finalLocation = initialLocation;
-		Expression expression = returnStatement.getExpression();
-		if(expression!=null){
-			XReturn = XReturn.replaceAll(" ", "");
-			SL.remove(XReturn + "," + "XC");
-			SL.remove(XReturn + "," + "IC");
-			SL.remove(XReturn + "," + "XI");
-			SL.remove(XReturn + "," + "II");
-			String rename = XReturn + "=" + rename(expression, RS, prefix) + ";";
-			Transition transition = new Transition(Transition.TAU, "true", rename + getSecurityAssignments(SL)
-			+ getSecurityAssignment(rename, "XC") + getSecurityAssignment(rename, "XI") 
-			+ getSecurityAssignment(rename.replaceAll(";", " && PC;"), "IC") 
-			+ getSecurityAssignment(rename.replaceAll(";", " && PC;"), "II"));
-			finalLocation = newLocation();
-			sts.addVertex(initialLocation);
-			sts.addVertex(finalLocation);
-			sts.addEdge(initialLocation, finalLocation, transition);
-			updateStsSecurityLabelling(initialLocation, finalLocation);
-		}
-		return finalLocation;
-	}
+	
 
-	private Integer processAssignment(Assignment assignment, String XReturn, Hashtable<String, String> RS, Integer initialLocation, String prefix, Hashtable<Integer, Integer> breakContinueLocations, Hashtable<String, String> SL) {
-		Integer finalLocation = initialLocation;
-		if((assignment.getRightHandSide() instanceof MethodInvocation || assignment.getRightHandSide() instanceof ClassInstanceCreation) 
-				&& canProcessMethod(assignment.getRightHandSide())){
-			Expression expression= assignment.getRightHandSide();
-			String methodArgumentsUpdater = getMethodArgumentsUpdater(expression, RS, prefix);
-			for (String part : methodArgumentsUpdater.split(";")) {
-				String leftHandSide = part.substring(0, part.indexOf("=")).replaceAll(" ", "");
-				SL.remove(leftHandSide + "," + "XC");
-				SL.remove(leftHandSide + "," + "IC");
-				SL.remove(leftHandSide + "," + "XI");
-				SL.remove(leftHandSide + "," + "II");
-			}
-			Transition transition = new Transition(Transition.TAU, "true", methodArgumentsUpdater + getSecurityAssignments(SL) 
-			+ getSecurityAssignment(methodArgumentsUpdater, "XC") + getSecurityAssignment(methodArgumentsUpdater, "XI") 
-			+ getSecurityAssignment(methodArgumentsUpdater.replaceAll(";", " && PC;"), "IC") + getSecurityAssignment(methodArgumentsUpdater.replaceAll(";", " && PC;"), "II"));
-			finalLocation = newLocation();
-			sts.addVertex(initialLocation);
-			sts.addVertex(finalLocation);
-			sts.addEdge(initialLocation, finalLocation, transition);
-			updateStsSecurityLabelling(initialLocation, finalLocation);
-			transition = new Transition(getMethodFullName(expression), "true", "");
-			initialLocation = finalLocation;
-			finalLocation = newLocation();
-			sts.addVertex(initialLocation);
-			sts.addVertex(finalLocation);
-			sts.addEdge(initialLocation, finalLocation, transition);
-			updateStsSecurityLabelling(initialLocation, finalLocation);
-			Hashtable<String, String> newRS = getRenamingRules(expression, prefix);
-			finalLocation = processBlock(getMethodBody(expression), rename(assignment.getLeftHandSide(), newRS, prefix), newRS, finalLocation, getScopedName(expression, prefix), breakContinueLocations, SL);
-		}else{
-			String rename = rename(assignment, RS, prefix) + ";";
-			String leftHandSide = rename.substring(0, rename.indexOf("=")).replaceAll(" ", "");
-			SL.remove(leftHandSide + "," + "XC");
-			SL.remove(leftHandSide + "," + "IC");
-			SL.remove(leftHandSide + "," + "XI");
-			SL.remove(leftHandSide + "," + "II");
-			Transition transition = new Transition(Transition.TAU, "true", rename + getSecurityAssignments(SL) 
-			+ getSecurityAssignment(rename, "XC") + getSecurityAssignment(rename, "XI") +  getSecurityAssignment(rename.replaceAll(";", " && PC;"), "IC") 
-			+ getSecurityAssignment(rename.replaceAll(";", " && PC;"), "II"));
-//			sts.variables.add("bool,LIC_" + leftHandSide);
-//			sts.variables.add("bool,LII_" + leftHandSide);
-			finalLocation = newLocation();
-			sts.addVertex(initialLocation);
-			sts.addVertex(finalLocation);
-			sts.addEdge(initialLocation, finalLocation, transition);
-			updateStsSecurityLabelling(initialLocation, finalLocation);
-		}
-		return finalLocation;
-	}
+	
 
 	private String getSecurityAssignment(String assignments, String policyType) {
 		String[] assignmentsParts = assignments.split(";");
@@ -854,34 +615,7 @@ public class STSExtractor {
 		return res;
 	}
 
-	private Integer processMethodInvocation(Expression expression, String XReturn,	Hashtable<String, String> RS, Integer initialLocation, String prefix, Hashtable<Integer, Integer> breakContinueLocations, Hashtable<String, String> SL) {
-		String methodArgumentsUpdater = getMethodArgumentsUpdater(expression, RS, prefix);
-		for (String part : methodArgumentsUpdater.split(";")) {
-			String leftHandSide = part.substring(0, part.indexOf("=")).replaceAll(" ", "");
-			SL.remove(leftHandSide + "," + "XC");
-			SL.remove(leftHandSide + "," + "IC");
-			SL.remove(leftHandSide + "," + "XI");
-			SL.remove(leftHandSide + "," + "II");
-		}
-		Transition transition = new Transition(Transition.TAU, "true", methodArgumentsUpdater + getSecurityAssignments(SL) 
-		+ getSecurityAssignment(methodArgumentsUpdater, "XC") + getSecurityAssignment(methodArgumentsUpdater, "XI") 
-		+ getSecurityAssignment(methodArgumentsUpdater.replaceAll(";", " && PC;"), "IC") + getSecurityAssignment(methodArgumentsUpdater.replaceAll(";", " && PC;"), "II"));
-		Integer finalLocation = newLocation();
-		sts.addVertex(initialLocation);
-		sts.addVertex(finalLocation);
-		sts.addEdge(initialLocation, finalLocation, transition);
-		updateStsSecurityLabelling(initialLocation, finalLocation);
-		transition = new Transition(getMethodFullName(expression), "true", "");
-		initialLocation = finalLocation;
-		finalLocation = newLocation();
-		sts.addVertex(initialLocation);
-		sts.addVertex(finalLocation);
-		sts.addEdge(initialLocation, finalLocation, transition);
-		updateStsSecurityLabelling(initialLocation, finalLocation);
-		Hashtable<String, String> newRS = getRenamingRules(expression, prefix);
-		finalLocation = processBlock(getMethodBody(expression), XReturn, newRS, finalLocation, getScopedName(expression, prefix), breakContinueLocations, SL);
-		return finalLocation;
-	}
+	
 
 	private void updateStsSecurityLabelling(Integer initialLocation, Integer finalLocation) {
 		if(sts.securityLabelling.get(initialLocation)!=null){
@@ -1003,157 +737,9 @@ public class STSExtractor {
 		return res;
 	}
 
-	@SuppressWarnings("unchecked")
-	private Integer processBlock(Block block, String XReturn, Hashtable<String, String> RS, Integer initialLocation, String prefix, Hashtable<Integer, Integer> breakContinueLocations, Hashtable<String, String> SL) {
-		List<Statement> statements = block.statements();
-		Integer finalLocation = initialLocation;
-		for (Statement statement : statements) {
-			finalLocation = processStatement(statement, XReturn, RS, finalLocation, prefix, breakContinueLocations, SL);
-		}
-		return finalLocation;
-	}
+	
 
-	private Integer processWhileStatement(WhileStatement whileStatement, String XReturn, Hashtable<String, String> RS, Integer initialLocation, String prefix, Hashtable<Integer, Integer> breakContinueLocations, Hashtable<String, String> SL) {
-		Integer blockEnterLocation = -initialLocation;
-		String whileExpression = rename(whileStatement.getExpression(), RS, prefix);
-		SL.remove("PC,IC");
-		SL.remove("PC,II");
-//		Hashtable <String, String> SLNotWhileBody = (Hashtable<String, String>) SL.clone();
-//		ArrayList<Expression> modifiedInWhileBody = getPossibleModifiedVariables(whileStatement.getBody());
-//		String implicitInderentWhileBody = "";
-//		for (Expression expression : modifiedInWhileBody) {
-//			implicitInderentWhileBody += rename(expression, RS, prefix) + "=" + rename(expression, RS, prefix) + "&&PC;";
-//			SLNotWhileBody.remove(rename(expression, RS, prefix) + ",IC");
-//			SLNotWhileBody.remove(rename(expression, RS, prefix) + ",II");
-//		}
-		pcLevel++;
-		sts.variables.add("bool,LIC_PC"+pcLevel);
-		sts.variables.add("bool,LII_PC"+pcLevel);
-		Transition entranceTransition = new Transition(Transition.TAU, whileExpression, getSecurityAssignments(SL)
-				+ getSecurityAssignment("PC=" + whileExpression + "&&PC", "IC") + getSecurityAssignment("PC=" + whileExpression + "&&PC", "II")
-				+ getSecurityAssignment("PC" + pcLevel + "=PC", "IC") + getSecurityAssignment("PC" + pcLevel + "=PC", "II"));
-//		Transition preExitTransition = new Transition(Transition.TAU, "  not (" + whileExpression + ")", "");
-		Transition exitTransition = new Transition(Transition.TAU, "  not (" + whileExpression + ")", getSecurityAssignments(SL)
-				+ getSecurityAssignment("PC=" + whileExpression + "&&PC", "IC") + getSecurityAssignment("PC=" + whileExpression + "&&PC", "II")
-				/*+ getSecurityAssignment(implicitInderentWhileBody, "IC") + getSecurityAssignment(implicitInderentWhileBody, "II")*/);
-		Integer entranceLocation = newLocation();
-		Integer finalLocation = newLocation();
-//		Integer preFinalLocation = newLocation();
-		sts.addVertex(initialLocation);
-		sts.addVertex(finalLocation);
-		sts.addVertex(entranceLocation);
-//		sts.addVertex(preFinalLocation);
-		sts.addEdge(initialLocation, entranceLocation, entranceTransition);
-		updateStsSecurityLabelling(initialLocation, entranceLocation);
-//		sts.addEdge(initialLocation, preFinalLocation, preExitTransition);
-//		updateStsSecurityLabelling(initialLocation, preFinalLocation);
-		sts.addEdge(initialLocation, finalLocation, exitTransition);
-		updateStsSecurityLabelling(initialLocation, finalLocation);
-		Integer tempLocation = processStatement(whileStatement.getBody(), XReturn, RS, entranceLocation, prefix, breakContinueLocations, SL);
-		pcLevel--;
-		String slpc = "";
-		if(pcLevel==0){
-			slpc = "LIC_PC=false;LII_PC=true;";
-		}else{
-			slpc = getSecurityAssignment("PC" + "=PC" + pcLevel, "IC") + getSecurityAssignment("PC" + "=PC" + pcLevel, "II");
-		}
-		Transition tempTransition =  new Transition(Transition.TAU, "true", getSecurityAssignments(SL) + slpc);
-		sts.addVertex(tempLocation);
-		sts.addEdge(tempLocation, initialLocation, tempTransition);
-		updateStsSecurityLabelling(tempLocation, initialLocation);
-		for (Integer location : breakContinueLocations.keySet()) {
-			sts.addVertex(location);
-			Transition tempBCTransition =  new Transition(Transition.TAU, "true", getSecurityAssignments(SL));
-			if(breakContinueLocations.get(location)==1){
-				sts.addEdge(location, finalLocation, tempBCTransition);
-				updateStsSecurityLabelling(location, finalLocation);
-			}else{
-				sts.addEdge(location, initialLocation, tempBCTransition);
-				updateStsSecurityLabelling(location, initialLocation);
-			}
-		}
-		blocks.put(blockEnterLocation, finalLocation);
-		return finalLocation;
-	}
-
-	@SuppressWarnings("unchecked")
-	private Integer processIfStatement(IfStatement ifStatement, String XReturn, Hashtable<String, String> RS, Integer initialLocation, String prefix, Hashtable<Integer, Integer> breakContinueLocations, Hashtable<String, String> SL) {
-		Integer blockEnterLocation = initialLocation;
-		String ifExpression = rename(ifStatement.getExpression(), RS, prefix);
-		SL.remove("PC,IC");
-		SL.remove("PC,II");
-//		Hashtable <String, String> SLThen = (Hashtable<String, String>) SL.clone();
-//		Hashtable <String, String> SLElse = (Hashtable<String, String>) SL.clone();
-//		ArrayList<Expression> modifiedInElsePart = getPossibleModifiedVariables(ifStatement.getElseStatement());
-//		String implicitInderentElsePart = "";
-//		for (Expression expression : modifiedInElsePart) {
-//			implicitInderentElsePart += rename(expression, RS, prefix) + "=" + rename(expression, RS, prefix) + "&&PC;";
-//			SLThen.remove(rename(expression, RS, prefix) + ",IC");
-//			SLThen.remove(rename(expression, RS, prefix) + ",II");
-//		}
-//		ArrayList<Expression> modifiedInThenPart = getPossibleModifiedVariables(ifStatement.getElseStatement());
-//		String implicitInderentThenPart = "";
-//		for (Expression expression : modifiedInThenPart) {
-//			implicitInderentThenPart += rename(expression, RS, prefix) + "=" + rename(expression, RS, prefix) + "&&PC;";
-//			SLElse.remove(rename(expression, RS, prefix) + ",IC");
-//			SLElse.remove(rename(expression, RS, prefix) + ",II");
-//		}
-		pcLevel++;
-		sts.variables.add("bool,LIC_PC"+pcLevel);
-		sts.variables.add("bool,LII_PC"+pcLevel);
-		Transition thenTransition = new Transition(Transition.TAU, ifExpression, getSecurityAssignments(SL)
-				+ getSecurityAssignment("PC=" + ifExpression + "&&PC", "IC") + getSecurityAssignment("PC=" + ifExpression + "&&PC", "II")
-				+ getSecurityAssignment("PC" + pcLevel + "=PC", "IC") + getSecurityAssignment("PC" + pcLevel + "=PC", "II")
-				/*+ getSecurityAssignment(implicitInderentElsePart, "IC") + getSecurityAssignment(implicitInderentElsePart, "II")*/);
-		Transition elseTransition = new Transition(Transition.TAU, "  not (" + ifExpression + ")", getSecurityAssignments(SL) 
-				+ getSecurityAssignment("PC=" + ifExpression + "&&PC", "IC") + getSecurityAssignment("PC=" + ifExpression + "&&PC", "II")
-				+ getSecurityAssignment("PC" + pcLevel + "=PC", "IC") + getSecurityAssignment("PC" + pcLevel + "=PC", "II")
-				/*+ getSecurityAssignment(implicitInderentThenPart, "IC") + getSecurityAssignment(implicitInderentThenPart, "II")*/);
-		Integer thenLocation = newLocation();
-		Integer elseLocation = newLocation();
-		sts.addVertex(initialLocation);
-		sts.addVertex(thenLocation);
-		sts.addVertex(elseLocation);
-		sts.addEdge(initialLocation, thenLocation, thenTransition);
-		updateStsSecurityLabelling(initialLocation, thenLocation);
-		sts.addEdge(initialLocation, elseLocation, elseTransition);
-		updateStsSecurityLabelling(initialLocation, elseLocation);
-		Integer finalThenLocation = processStatement(ifStatement.getThenStatement(), XReturn, RS, thenLocation, prefix, breakContinueLocations, SL);
-		Integer finalLocation = finalThenLocation;
-		Integer finalElseLocation = elseLocation;
-		if(ifStatement.getElseStatement()!=null){
-			finalElseLocation = processStatement(ifStatement.getElseStatement(), XReturn, RS, elseLocation, prefix, breakContinueLocations, SL);
-			
-		}
-		pcLevel--;
-		String slpc = "";
-		if(pcLevel==0){
-			slpc = "LIC_PC=false;LII_PC=true;";
-		}else{
-			slpc = getSecurityAssignment("PC" + "=PC" + pcLevel, "IC") + getSecurityAssignment("PC" + "=PC" + pcLevel, "II");
-		}
-//		Transition transition2 = new Transition(Transition.TAU, "true", "");
-//		Integer preFinalElseLocation = newLocation();
-		finalLocation = newLocation();
-		sts.addVertex(finalLocation);
-//		sts.addVertex(finalThenLocation);
-//		sts.addVertex(preFinalElseLocation);
-		sts.addVertex(finalElseLocation);
-		if(!breakContinueLocations.containsKey(finalThenLocation)){
-			Transition transition1 = new Transition(Transition.TAU, "true", getSecurityAssignments(SL) + slpc);
-			sts.addEdge(finalThenLocation, finalLocation, transition1);
-			updateStsSecurityLabelling(finalThenLocation, finalLocation);
-		}
-		if(!breakContinueLocations.containsKey(finalElseLocation)){
-			Transition transition2 = new Transition(Transition.TAU, "true", getSecurityAssignments(SL) + slpc);
-			sts.addEdge(finalElseLocation, finalLocation, transition2);
-			updateStsSecurityLabelling(finalElseLocation, finalLocation);
-		}
-//		sts.addEdge(preFinalElseLocation, finalLocation, transition3);
-//		updateStsSecurityLabelling(preFinalElseLocation, finalLocation);
-		blocks.put(blockEnterLocation, finalLocation);
-		return finalLocation;
-	}
+	
 	
 	static Hashtable<String, Expression> modified = new Hashtable<String, Expression>();
 	private ArrayList<Expression> getPossibleModifiedVariables(Statement statement) {
@@ -1292,22 +878,7 @@ public class STSExtractor {
 		return string;
 	}
 
-	static CompilationUnit getCompilationUnit(String[] sourceDir, String[] classPath, String javaFilePath) {
-		ASTParser parser = ASTParser.newParser(AST.JLS4);
-		parser.setResolveBindings(true);
-		parser.setKind(ASTParser.K_COMPILATION_UNIT);
-		parser.setBindingsRecovery(true);
-		@SuppressWarnings("rawtypes")
-		Map options = JavaCore.getOptions();
-		parser.setCompilerOptions(options);
-		parser.setSource(Utils.readTextFile(javaFilePath));
-		parser.setUnitName(new File(javaFilePath).getName());
-		parser.setEnvironment(classPath, sourceDir, new String[] { "UTF-8"}, true);
-		CompilationUnit compilationUnit = (CompilationUnit) parser.createAST(null);
-		return compilationUnit;
-	}
-	
-	Integer newLocation(){
+	public Integer newLocation(){
 		return ++newLocation;
 	}
 	
@@ -1328,21 +899,14 @@ public class STSExtractor {
 		return res;
 	}
 
-	static ArrayList<String> getAllJavaFilePaths(String directoryPath) {
-		ArrayList<String> allJavaFilePaths = new ArrayList<String>();
-		getAllJavaFilePaths(directoryPath, allJavaFilePaths);
-		return allJavaFilePaths;
-	}
-	
-	private static void getAllJavaFilePaths(String directoryPath, ArrayList<String> allJavaFilePaths) {
-		File directory = new File(directoryPath);
-		File[] directoryContent = directory.listFiles();
-		for (File file : directoryContent) {
-			if(file.isFile()&&file.getName().toLowerCase().endsWith(".java")){
-				allJavaFilePaths.add(file.getAbsolutePath());
-			}else if(file.isDirectory()){
-				getAllJavaFilePaths(file.getAbsolutePath(), allJavaFilePaths);
+	public boolean isEntryPoint(String qualifiedMethodName) {
+		boolean isIt = false;
+		for (String filter : entryPoints) {
+			if (qualifiedMethodName.matches(filter)) {
+				isIt = true;
+				break;
 			}
 		}
+		return isIt;
 	}
 }
