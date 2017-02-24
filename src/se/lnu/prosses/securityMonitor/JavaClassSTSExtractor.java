@@ -52,23 +52,16 @@ public class JavaClassSTSExtractor {
 	private Integer processMethod(MethodDeclaration methodDeclaration) {
 		int oldScopeId = parent.scopeId;
 		parent.scopeId++;
-		List<Statement> statements = methodDeclaration.getBody().statements();
 		Integer location = parent.newLocation();
 		String qualifiedMethodName = javaFileHelper.getQualifiedName(methodDeclaration);
 		String action = parent.sts.addAction(qualifiedMethodName);
 		parent.sts.addTransition(1, location, action, "true", "");
-		Hashtable<String, String> RS = new Hashtable<String, String>();
-		for (Statement statement : statements) {
-			location = processStatement(statement, "", RS, location, prefix, new Hashtable<Integer, Integer>(), SL);
-		}
+		location = processStatement(methodDeclaration.getBody(), location);
 		parent.scopeId = oldScopeId;
 		return location;
 	}
 	
-	private Integer processStatement(Statement statement, String XReturn, Hashtable<String, String> RS, Integer initialLocation, String prefix, Hashtable<Integer, Integer> breakContinueLocations, Hashtable<String, String> SL) {
-		if(initialLocation==59){
-			System.out.println(statement);
-		}
+	private Integer processStatement(Statement statement, Integer initialLocation) {
 		Integer finalLocation = initialLocation; 
 		switch(statement.getNodeType()){
 		case ASTNode.EXPRESSION_STATEMENT:
@@ -87,7 +80,7 @@ public class JavaClassSTSExtractor {
 			break;
 		case ASTNode.IF_STATEMENT:
 			IfStatement ifStatement = (IfStatement) statement;
-			finalLocation = processIfStatement(ifStatement, XReturn, RS, initialLocation, prefix, breakContinueLocations, SL);
+			finalLocation = processIfStatement(ifStatement, initialLocation);
 			break;
 		case ASTNode.WHILE_STATEMENT:
 			WhileStatement whileStatement = (WhileStatement) statement;
@@ -104,12 +97,6 @@ public class JavaClassSTSExtractor {
 		case ASTNode.BLOCK:
 			Block block = (Block) statement;
 			finalLocation = processBlock(block, XReturn, RS, initialLocation, prefix, breakContinueLocations, SL);
-			break;
-		case ASTNode.BREAK_STATEMENT:
-			breakContinueLocations.put(finalLocation, 1);
-			break;
-		case ASTNode.CONTINUE_STATEMENT:
-			breakContinueLocations.put(finalLocation, -1);
 			break;
 		case ASTNode.VARIABLE_DECLARATION_STATEMENT:
 			VariableDeclarationStatement variableDeclarationStatement = (VariableDeclarationStatement) statement;
@@ -358,11 +345,9 @@ public class JavaClassSTSExtractor {
 	}
 
 	@SuppressWarnings("unchecked")
-	private Integer processIfStatement(IfStatement ifStatement, String XReturn, Hashtable<String, String> RS, Integer initialLocation, String prefix, Hashtable<Integer, Integer> breakContinueLocations, Hashtable<String, String> SL) {
+	private Integer processIfStatement(IfStatement ifStatement, Integer initialLocation) {
 		Integer blockEnterLocation = initialLocation;
 		String ifExpression = rename(ifStatement.getExpression(), RS, prefix);
-		SL.remove("PC,IC");
-		SL.remove("PC,II");
 //		Hashtable <String, String> SLThen = (Hashtable<String, String>) SL.clone();
 //		Hashtable <String, String> SLElse = (Hashtable<String, String>) SL.clone();
 //		ArrayList<Expression> modifiedInElsePart = getPossibleModifiedVariables(ifStatement.getElseStatement());

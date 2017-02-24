@@ -13,6 +13,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Queue;
 import java.util.Set;
+import java.util.Stack;
 
 import org.eclipse.jdt.core.JavaCore;
 import org.eclipse.jdt.core.dom.AST;
@@ -44,6 +45,8 @@ import org.eclipse.jdt.core.dom.WhileStatement;
 
 public class JavaProjectSTSExtractor {
 	JavaProjectHelper javaProjectHelper;
+	Stack<String> returnExpression;
+	Stack<Hashtable<String, String>> renamingRules;
 	int newLocation = 2;
 	int pcLevel = 0;
 	int maxPcLevel = 0;
