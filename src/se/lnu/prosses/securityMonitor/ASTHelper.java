@@ -1,6 +1,7 @@
 package se.lnu.prosses.securityMonitor;
 
 import java.io.File;
+import java.util.List;
 import java.util.Map;
 
 import org.eclipse.jdt.core.JavaCore;
@@ -12,6 +13,7 @@ import org.eclipse.jdt.core.dom.Block;
 import org.eclipse.jdt.core.dom.CompilationUnit;
 import org.eclipse.jdt.core.dom.Expression;
 import org.eclipse.jdt.core.dom.ITypeBinding;
+import org.eclipse.jdt.core.dom.IfStatement;
 import org.eclipse.jdt.core.dom.MethodInvocation;
 import org.eclipse.jdt.core.dom.Statement;
 import org.eclipse.jdt.core.dom.VariableDeclarationStatement;
@@ -159,5 +161,16 @@ public class ASTHelper {
 			}
 		});
 		return hasMethodInvocation;
+	}
+
+	public void insertStatementsBefore(ASTNode insertionPoint, List<ASTNode> normalizedExpression, int start, int end) throws Exception {
+		for (int i=end; i>=start; i--) {
+			insertStatementBefore(insertionPoint, normalizedExpression.get(i));
+		}		
+	}
+
+	public void insertStatementsExceptFirstBefore(ASTNode insertionPoint, List<ASTNode> insertingNodes) throws Exception {
+		insertStatementsBefore(insertionPoint, insertingNodes, 1, insertingNodes.size()-1);
+		
 	}
 }

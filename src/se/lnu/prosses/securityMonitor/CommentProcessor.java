@@ -127,7 +127,7 @@ public class CommentProcessor {
 		methodName = methodName.substring(0, processed.indexOf("(")-1);
 		String[] parts = processed.split(" ");
 		methodName = parts[parts.length-1];
-		processed += "se.lnu.checkPoint(\"" + methodName + "\");";
+		processed += "se.lnu.DummyMethods.checkPoint(\"" + methodName + "\");";
 		return processed;
 	}
 
@@ -161,7 +161,7 @@ public class CommentProcessor {
 	 */
 	static private String makeSecurityPolicyMethodInvocation(String annotation, String method) throws Exception {
 		String[] wellOrderedParameters = getWellOrderedParameters(annotation);
-		String SecurityPolicyMethodInvocation = "se.lnu.securityPolicy."
+		String SecurityPolicyMethodInvocation = "se.lnu.DummyMethods."
 				+ method
 				+ "("
 				+ "\"" + wellOrderedParameters[0] + "\", "

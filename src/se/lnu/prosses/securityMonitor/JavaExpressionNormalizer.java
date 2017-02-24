@@ -85,7 +85,7 @@ public class JavaExpressionNormalizer {
 		generatedAssignment += ((methodInvocation.getExpression()==null)?"":methodInvocation.getExpression().toString() + ".") + methodInvocation.getName() + "("; 
 		String separator = "";
 		for (Object argument : methodInvocation.arguments()) {
-			if(isNormalized((Expression) argument)){
+			if(!isNormalized((Expression) argument)){
 				index++;
 				stack.push(new Object[]{auxVariablePrefix+index, argument});
 				generatedAssignment += separator + auxVariablePrefix+index;
@@ -104,7 +104,7 @@ public class JavaExpressionNormalizer {
 		String generatedAssignment = astHelper.getExpressionTypeName(postfixExpression) 
 				+ " " + indexAndExpression[0] + " = ";
 		Expression operand = postfixExpression.getOperand();
-		if(isNormalized(operand)){
+		if(!isNormalized(operand)){
 			index++;
 			stack.push(new Object[]{auxVariablePrefix+index, operand});
 			generatedAssignment += auxVariablePrefix+index;
@@ -122,7 +122,7 @@ public class JavaExpressionNormalizer {
 				+ " " + indexAndExpression[0] + " = ";
 		Expression operand = prefixExpression.getOperand();
 		generatedAssignment += prefixExpression.getOperator().toString() + " ";
-		if(isNormalized(operand)){
+		if(!isNormalized(operand)){
 			index++;
 			stack.push(new Object[]{auxVariablePrefix+index, operand});
 			generatedAssignment += auxVariablePrefix+index;
@@ -138,7 +138,7 @@ public class JavaExpressionNormalizer {
 		String generatedAssignment = astHelper.getExpressionTypeName(infixExpression) 
 				+ " " + indexAndExpression[0] + " = ";
 		Expression leftOperand = infixExpression.getLeftOperand();
-		if(isNormalized(leftOperand)){
+		if(!isNormalized(leftOperand)){
 			index++;
 			stack.push(new Object[]{auxVariablePrefix+index, leftOperand});
 			generatedAssignment += auxVariablePrefix+index;
@@ -147,7 +147,7 @@ public class JavaExpressionNormalizer {
 		}
 		generatedAssignment += " " + infixExpression.getOperator().toString() + " ";
 		Expression rightOperand = infixExpression.getRightOperand();
-		if(isNormalized(rightOperand)){
+		if(!isNormalized(rightOperand)){
 			index++;
 			stack.push(new Object[]{auxVariablePrefix+index, rightOperand});
 			generatedAssignment += auxVariablePrefix+index;
