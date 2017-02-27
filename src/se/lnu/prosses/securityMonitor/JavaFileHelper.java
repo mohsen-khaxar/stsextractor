@@ -1,6 +1,7 @@
 package se.lnu.prosses.securityMonitor;
 
 import java.io.File;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
@@ -10,11 +11,14 @@ import org.eclipse.jdt.core.dom.ASTNode;
 import org.eclipse.jdt.core.dom.ASTParser;
 import org.eclipse.jdt.core.dom.ASTVisitor;
 import org.eclipse.jdt.core.dom.Block;
+import org.eclipse.jdt.core.dom.ClassInstanceCreation;
 import org.eclipse.jdt.core.dom.CompilationUnit;
 import org.eclipse.jdt.core.dom.Expression;
 import org.eclipse.jdt.core.dom.ITypeBinding;
 import org.eclipse.jdt.core.dom.MethodDeclaration;
 import org.eclipse.jdt.core.dom.MethodInvocation;
+import org.eclipse.jdt.core.dom.SimpleName;
+import org.eclipse.jdt.core.dom.SingleVariableDeclaration;
 import org.eclipse.jdt.core.dom.Statement;
 import org.eclipse.jdt.core.dom.TypeDeclaration;
 import org.eclipse.jdt.core.dom.rewrite.ASTRewrite;
@@ -176,7 +180,55 @@ public class JavaFileHelper {
 		if(astNode instanceof MethodDeclaration){
 			qualiofiedName = ((MethodDeclaration) astNode).resolveBinding().getDeclaringClass().getQualifiedName() 
 					+ "." + ((MethodDeclaration) astNode).getName();
+		}else if(astNode instanceof ClassInstanceCreation){
+			qualiofiedName = ((ClassInstanceCreation)astNode).resolveConstructorBinding().getDeclaringClass().getQualifiedName()
+					+ "." + ((ClassInstanceCreation) astNode).getName();
 		}
 		return qualiofiedName;
+	}
+	
+	@SuppressWarnings("unchecked")
+	public List<Expression> getMethodArguments(Expression expression) {
+		List<Expression> arguments = null;
+		if(expression instanceof MethodInvocation){
+			arguments = ((MethodInvocation) expression).arguments();
+		}else if(expression instanceof ClassInstanceCreation){
+			arguments = ((ClassInstanceCreation) expression).arguments();
+		}
+		return arguments;
+	}
+	
+	public MethodDeclaration getMethodDeclaration(Expression expression) {
+		String expressionResolveBinding = "";
+		if(expression instanceof MethodInvocation){
+			expressionResolveBinding  = ((MethodInvocation) expression).resolveMethodBinding().toString();
+		}else if(expression instanceof ClassInstanceCreation){
+			expressionResolveBinding = ((ClassInstanceCreation) expression).resolveConstructorBinding().toString();
+		}
+		TypeDeclaration clazz = parent.getDeclaringClass(expression);
+		MethodDeclaration methodDeclaration = null;
+		for (MethodDeclaration mDeclaration : clazz.getMethods()) {
+			if(mDeclaration.resolveBinding().toString().equals(expressionResolveBinding)){
+				methodDeclaration = mDeclaration;
+				break;
+			}
+		}
+		return methodDeclaration;
+	}
+	
+	@SuppressWarnings("unchecked")
+	public List<SimpleName> getMethodParameters(Expression expression) {
+		MethodDeclaration methodDeclaration = getMethodDeclaration(expression);
+		List<SingleVariableDeclaration> parameters = methodDeclaration.parameters();
+		ArrayList<SimpleName> parameterNames = new ArrayList<>();
+		for (SingleVariableDeclaration singleVariableDeclaration : parameters) {
+			parameterNames.add(singleVariableDeclaration.getName());
+		}
+		return parameterNames;
+	}
+	
+	public Block getMethodBody(Expression expression) {
+		MethodDeclaration methodDeclaration = getMethodDeclaration(expression);
+		return methodDeclaration.getBody();
 	}
 }

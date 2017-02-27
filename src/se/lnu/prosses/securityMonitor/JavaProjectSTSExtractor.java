@@ -14,6 +14,8 @@ import java.util.Map;
 import java.util.Queue;
 import java.util.Set;
 import java.util.Stack;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import org.eclipse.jdt.core.JavaCore;
 import org.eclipse.jdt.core.dom.AST;
@@ -46,7 +48,7 @@ import org.eclipse.jdt.core.dom.WhileStatement;
 public class JavaProjectSTSExtractor {
 	JavaProjectHelper javaProjectHelper;
 	Stack<String> returnExpression;
-	Stack<Hashtable<String, String>> renamingRules;
+	Stack<Hashtable<SimpleName, String>> renamingRuleSets;
 	int newLocation = 2;
 	int pcLevel = 0;
 	int maxPcLevel = 0;
@@ -537,7 +539,19 @@ public class JavaProjectSTSExtractor {
 	
 	
 
+    public String getUniqueName(SimpleName simpleName){
+    	return "";
+    }
+    
+    public int enterScope(){
+    	int oldScopeId = this.scopeId;
+    	this.scopeId++;
+    	return oldScopeId;
+    }
 	
+    public void exitScope(int oldScopeId){
+    	this.scopeId = oldScopeId;
+    }
 	
 	private String getScopedName(Expression expression, String prefix){
 		String scopedName = "";
@@ -603,23 +617,6 @@ public class JavaProjectSTSExtractor {
 		return securityAssignment;
 	}
 
-	private boolean canProcessMethod(Expression expression) {
-		boolean res = false;
-		String declaringClass = "";
-		if(expression instanceof MethodInvocation){
-			declaringClass = ((MethodInvocation)expression).resolveMethodBinding().getDeclaringClass().getQualifiedName();
-		}else if(expression instanceof ClassInstanceCreation){
-			declaringClass = ((ClassInstanceCreation)expression).resolveConstructorBinding().getDeclaringClass().getQualifiedName();
-		}
-		String methodFullName = declaringClass + "." + expression.toString().replaceAll("new\\s+", "");
-		if(canProcess(methodFullName)){
-			res = true;
-		}
-		return res;
-	}
-
-	
-
 	private void updateStsSecurityLabelling(Integer initialLocation, Integer finalLocation) {
 		if(sts.securityLabelling.get(initialLocation)!=null){
 			String[] securityLabellingParts = sts.securityLabelling.get(initialLocation).split(";");
@@ -635,115 +632,6 @@ public class JavaProjectSTSExtractor {
 		}
 	}
 
-	@SuppressWarnings("rawtypes")
-	private String getMethodArgumentsUpdater(Expression expression, Hashtable<String, String> RS, String prefix) {
-		ArrayList<String> methodParameters = getMethodParameters(expression, getScopedName(expression, prefix));
-		List arguments = null;
-		if(expression instanceof MethodInvocation){
-			arguments = ((MethodInvocation) expression).arguments();
-		}else if(expression instanceof ClassInstanceCreation){
-			arguments = ((ClassInstanceCreation) expression).arguments();
-		}
-		Hashtable<String, String> newRS = getRenamingRules(expression, prefix);
-		String res = "";
-		for (int i=0; i< methodParameters.size(); i++) {
-			String methodParameter = methodParameters.get(i);
-			String fullParameterName = getScopedName(expression, prefix) + "_" + methodParameter;
-//			if(!newRS.containsKey(methodParameter)){
-			res += fullParameterName  + "=" + rename((Expression) arguments.get(i), RS, prefix) + ";";
-//			}
-		}
-		return res;
-	}
-
-	@SuppressWarnings("unchecked")
-	private ArrayList<String> getMethodParameters(Expression expression, String prefix) {
-		String declaringClass = "";
-		if(expression instanceof MethodInvocation){
-			declaringClass = ((MethodInvocation) expression).resolveMethodBinding().getDeclaringClass().getQualifiedName();
-		}else if(expression instanceof ClassInstanceCreation){
-			declaringClass = ((ClassInstanceCreation) expression).resolveConstructorBinding().getDeclaringClass().getQualifiedName();
-		}
-		TypeDeclaration cls = classes.get(declaringClass);
-		ArrayList<String> res = new ArrayList<>();
-		for (MethodDeclaration methodDeclaration : cls.getMethods()) {
-			String expressionResolveBinding = "";
-			if(expression instanceof MethodInvocation){
-				expressionResolveBinding  = ((MethodInvocation) expression).resolveMethodBinding().toString();
-			}else if(expression instanceof ClassInstanceCreation){
-				expressionResolveBinding = ((ClassInstanceCreation) expression).resolveConstructorBinding().toString();
-			}
-			if(methodDeclaration.resolveBinding().toString().equals(expressionResolveBinding)){
-				List<SingleVariableDeclaration> parameters = methodDeclaration.parameters();
-				for (SingleVariableDeclaration singleVariableDeclaration : parameters) {
-					res.add(singleVariableDeclaration.getName().getFullyQualifiedName());
-					addVariable(singleVariableDeclaration.getName(), prefix + "_" + singleVariableDeclaration.getName().toString());
-				}
-				break;
-			}
-		}
-		return res;
-	}
-
-	private Block getMethodBody(Expression expression) {
-		String declaringClass = "";
-		if(expression instanceof MethodInvocation){
-			declaringClass = ((MethodInvocation) expression).resolveMethodBinding().getDeclaringClass().getQualifiedName();
-		}else if(expression instanceof ClassInstanceCreation){
-			declaringClass = ((ClassInstanceCreation) expression).resolveConstructorBinding().getDeclaringClass().getQualifiedName();
-		}
-		TypeDeclaration cls = classes.get(declaringClass);
-		Block res = expression.getAST().newBlock();
-		for (MethodDeclaration methodDeclaration : cls.getMethods()) {
-			String expressionResolveBinding = "";
-			if(expression instanceof MethodInvocation){
-				expressionResolveBinding  = ((MethodInvocation) expression).resolveMethodBinding().toString();
-			}else if(expression instanceof ClassInstanceCreation){
-				expressionResolveBinding = ((ClassInstanceCreation) expression).resolveConstructorBinding().toString();
-			}
-			if(methodDeclaration.resolveBinding().toString().equals(expressionResolveBinding)){
-				res = methodDeclaration.getBody();
-				break;
-			}
-		}
-		return res;
-	}
-
-	@SuppressWarnings("rawtypes")
-	private Hashtable<String, String> getRenamingRules(Expression expression, String prefix) {
-		ArrayList<String> methodParameters = getMethodParameters(expression, getScopedName(expression, prefix));
-		List arguments = null;
-		if(expression instanceof MethodInvocation){
-			arguments = ((MethodInvocation) expression).arguments();
-		}else if(expression instanceof ClassInstanceCreation){
-			arguments = ((ClassInstanceCreation) expression).arguments();
-		}
-		Hashtable<String, String> res = new Hashtable<>();
-		for (int i=0; i< arguments.size(); i++) {
-			Object methodArgument = arguments.get(i);
-			if(methodArgument instanceof SimpleName){
-				ITypeBinding iTypeBinding = ((SimpleName) methodArgument).resolveTypeBinding();
-				if(!iTypeBinding.isPrimitive() 
-						&& !iTypeBinding.getQualifiedName().equals("java.lang.Integer")
-						&& !iTypeBinding.getQualifiedName().equals("java.lang.Long")
-						&& !iTypeBinding.getQualifiedName().equals("java.lang.Byte")
-						&& !iTypeBinding.getQualifiedName().equals("java.lang.Short")
-						&& !iTypeBinding.getQualifiedName().equals("java.lang.Float")
-						&& !iTypeBinding.getQualifiedName().equals("java.lang.Double")
-						&& !iTypeBinding.getQualifiedName().equals("java.lang.BigDecimal")
-						&& !iTypeBinding.getQualifiedName().equals("java.lang.BigInteger")
-						&& !iTypeBinding.getQualifiedName().equals("java.lang.Boolean")){
-					res.put(methodParameters.get(i), prefix + "_" + arguments.get(i).toString());
-				}
-			}
-		}
-		return res;
-	}
-
-	
-
-	
-	
 	static Hashtable<String, Expression> modified = new Hashtable<String, Expression>();
 	private ArrayList<Expression> getPossibleModifiedVariables(Statement statement) {
 		ArrayList<Expression> res = new ArrayList<>();
@@ -789,41 +677,55 @@ public class JavaProjectSTSExtractor {
 		return res;
 	}
 	
-	static String renamed = "";
-	static String temp = "";
-	private String rename(Expression expression, final Hashtable<String, String> RS, final String prefix){
-		renamed = " " + expression.toString() + " ";
-		renamed = renamed.replaceAll("\\s+\\(", "(");
-//		if(expression.toString().replaceAll(" ", "").contains("(user.location.x-x)*(user.location.x-x)")){
-//			System.out.println(expression);
-//		}
+	public String rename(Expression expression){
+		String renamed = expression.toString();
+		renamed = " " + renamed.replaceAll("\\.\\s*", ".").replaceFirst("[\\w_\\.\\$]+\\s*\\(", "(") + " ";
+		Hashtable<SimpleName, String> renamingRuleSet = renamingRuleSets.peek();
+		String regex = "[^\\.\\w_\\$][\\w_\\$]+";
+		Pattern pattern = Pattern.compile(regex);
+        Matcher matcher = pattern.matcher(renamed);
+        StringBuffer stringBuffer = new StringBuffer();
+        while (matcher.find()) {
+        	String find = matcher.group();
+        	SimpleName simpleName = getSimpleNameByName(expression, find.substring(1));
+        	String replacement = find.substring(0, 0);
+        	if(renamingRuleSet.containsKey(simpleName)){
+        		replacement += renamingRuleSet.get(simpleName);
+        	}else{
+        		replacement += getUniqueName(simpleName);
+        	}
+			matcher.appendReplacement(stringBuffer, replacement);
+        }
+        matcher.appendTail(stringBuffer);
+        renamed = stringBuffer.toString();
+        
+        regex = "[^\\.\\w_\\$][\\.\\w_\\$]+";
+		pattern = Pattern.compile(regex);
+        matcher = pattern.matcher(renamed);
+        stringBuffer = new StringBuffer();
+        while (matcher.find()) {
+        	String find = matcher.group();
+        	String replacement = find.replaceAll("\\.", "_");
+			matcher.appendReplacement(stringBuffer, replacement);
+        }
+        matcher.appendTail(stringBuffer);
+        renamed = stringBuffer.toString();
+		return renamed;
+	}
+	
+	static SimpleName simpleName = null;
+	public SimpleName getSimpleNameByName(Expression expression, String name){
 		expression.accept(new ASTVisitor() {
 			@Override
-			public boolean visit(SimpleName simpleName) {
-				if(simpleName.resolveBinding()!=null && simpleName.resolveBinding() instanceof IVariableBinding){
-					IVariableBinding resolveBinding = (IVariableBinding)simpleName.resolveBinding();
-					if(resolveBinding.isParameter() && RS.contains(simpleName.getIdentifier())){
-						renamed = replace(renamed, simpleName.getIdentifier(), RS.get(simpleName.getIdentifier()));
-						addVariable(simpleName, RS.get(simpleName.getIdentifier()));
-					}else if(simpleName.getParent().getNodeType()!=ASTNode.QUALIFIED_NAME) {
-						renamed = replace(renamed, simpleName.getIdentifier(), prefix + "_" + simpleName.getIdentifier());
-						addVariable(simpleName, prefix + "_" + simpleName.getIdentifier());
-					}else if(simpleName.getParent().toString().startsWith(simpleName.toString())){
-//						renamed = replace(renamed, simpleName.getIdentifier(), prefix + "_" + simpleName.getIdentifier());
-						temp = simpleName.getIdentifier();
-					}else if(simpleName.getParent().getParent().getNodeType()!=ASTNode.QUALIFIED_NAME){
-						renamed = replace(renamed, temp + "." + simpleName.getIdentifier(), prefix + "_" + temp.replaceAll("\\.", "_") + "_" + simpleName.getIdentifier());
-						addVariable(simpleName, prefix + "_" + temp.replaceAll("\\.", "_") + "_" + simpleName.getIdentifier());
-					} else{
-//						renamed = replace(renamed, "." + simpleName.getIdentifier(), "_" + simpleName.getIdentifier());
-						temp += "." + simpleName.getIdentifier();
-					}
+			public boolean visit(SimpleName node) {
+//				TODO must be sure that it is the root.
+				if(node.getIdentifier().equals(name)){
+					simpleName = node;
 				}
 				return false;
 			}
 		});
-		renamed = renamed.replaceAll("\\.", "_");
-		return renamed;
+		return simpleName;
 	}
 	
 	public void addVariable(SimpleName simpleName, String renamed) {
@@ -885,7 +787,7 @@ public class JavaProjectSTSExtractor {
 		return ++newLocation;
 	}
 	
-	private boolean canProcess(String methodFullName) {
+	public boolean canProcess(String methodFullName) {
 		boolean res = false;
 		for (String filter : includingFilter) {
 			if(methodFullName.matches(filter)){
@@ -912,4 +814,9 @@ public class JavaProjectSTSExtractor {
 		}
 		return isIt;
 	}
+
+	public String getLPCUniqueName() {
+		return "LPC" + scopeId;
+	}
+
 }

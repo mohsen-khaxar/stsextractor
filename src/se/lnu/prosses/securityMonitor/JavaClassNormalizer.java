@@ -90,9 +90,7 @@ public class JavaClassNormalizer {
 			break;
 		case ASTNode.BLOCK:
 			Block block = (Block) statement;
-			for (Object blockStatement : block.statements()) {
-				normalizeStatement((Statement) blockStatement);
-			}
+			normalizeBlock(block);
 			break;
 		default:
 //			Nothing				
@@ -111,6 +109,12 @@ public class JavaClassNormalizer {
 		javaFileHelper.insertExpressionInsteadOf(expressionStatement, normalizedAssignment);
 	}
 
+	private void normalizeBlock(Block block) throws Exception {
+		for (Object blockStatement : block.statements()) {
+			normalizeStatement((Statement) blockStatement);
+		}
+	}
+	
 	private void normalizeVariabledeclarationStatement(VariableDeclarationStatement variableDeclarationStatement) throws Exception {
 		for (Object fragment : variableDeclarationStatement.fragments()) {
 			VariableDeclarationFragment variableDeclarationFragment = (VariableDeclarationFragment)fragment;

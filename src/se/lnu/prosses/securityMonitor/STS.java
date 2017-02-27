@@ -40,6 +40,11 @@ public class STS extends AbstractBaseGraph<Integer, Transition> implements Direc
 	Set<String> controllableEvents;
 	public Hashtable<Integer, String> securityLabelling;
 	
+	static final public String TAU = "TAU";
+	public static final String START = "START";
+	public static final String RETURN = "RETURN";
+	public static final String PARAMETER = "PARAMETER";
+	
 	static EdgeFactory<Integer, Transition> ef = new EdgeFactory<Integer, Transition>() {
 		@Override
 		public Transition createEdge(Integer sourceVertex, Integer targetVertex) {
@@ -56,9 +61,9 @@ public class STS extends AbstractBaseGraph<Integer, Transition> implements Direc
 			controllableMethodName = controllableMethodName.replaceAll("\\.", "_");
 			controllableEvents.add(controllableMethodName);
 		}
-		controllableEvents.add(Transition.START);
-		controllableEvents.add(Transition.RETURN);
-		controllableEvents.add(Transition.PARAMETER);
+		controllableEvents.add(STS.START);
+		controllableEvents.add(STS.RETURN);
+		controllableEvents.add(STS.PARAMETER);
 		this.securityLabelling = new Hashtable<>();
 	}
 	
@@ -425,7 +430,7 @@ public class STS extends AbstractBaseGraph<Integer, Transition> implements Direc
 	private void removeSTARTTransitions(STS sts) {
 		Set<Transition> transitions = new HashSet<>();
 		for (Transition transition : sts.edgeSet()) {
-			if(transition.getAction().equals(Transition.START)){
+			if(transition.getAction().equals(STS.START)){
 				transitions.add(transition);
 			}
 		}
@@ -455,7 +460,7 @@ public class STS extends AbstractBaseGraph<Integer, Transition> implements Direc
 			String updater = "";
 			Integer source = sts.getEdgeSource(transition);
 			Integer target = sts.getEdgeTarget(transition);
-			if(transition.getAction().equals(Transition.PARAMETER)){
+			if(transition.getAction().equals(STS.PARAMETER)){
 				if(!transition.getUpdate().matches("\\s*")){
 					updater = transition.getUpdate().replaceAll("L(XC|IC|XI|II)_", "@@");
 					updater = updater.substring(0, updater.indexOf("@@"));
@@ -471,7 +476,7 @@ public class STS extends AbstractBaseGraph<Integer, Transition> implements Direc
 					sts.removeVertex(target);
 				}
 				sts.removeEdge(transition);
-			}else if(transition.getAction().equals(Transition.RETURN)){
+			}else if(transition.getAction().equals(STS.RETURN)){
 				sts.removeAllEdges(source, target);
 				transition.setUpdate("");
 				transition.setAction(((Transition)(sts.incomingEdgesOf(source).toArray()[0])).getAction());

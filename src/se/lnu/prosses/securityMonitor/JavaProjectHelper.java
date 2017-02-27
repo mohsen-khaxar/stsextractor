@@ -5,6 +5,11 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Hashtable;
 
+import org.eclipse.jdt.core.dom.ClassInstanceCreation;
+import org.eclipse.jdt.core.dom.Expression;
+import org.eclipse.jdt.core.dom.MethodInvocation;
+import org.eclipse.jdt.core.dom.TypeDeclaration;
+
 public class JavaProjectHelper {
 	String sourcePath; 
 	String[] classPath;
@@ -58,5 +63,16 @@ public class JavaProjectHelper {
 
 	public Collection<JavaFileHelper> getAllJavaFileHelpers() {
 		return javaFileHelpers.values();
+	}
+	
+	public TypeDeclaration getDeclaringClass(Expression expression) {
+		String declaringClass = "";
+		if(expression instanceof MethodInvocation){
+			declaringClass = ((MethodInvocation) expression).resolveMethodBinding().getDeclaringClass().getQualifiedName();
+		}else if(expression instanceof ClassInstanceCreation){
+			declaringClass = ((ClassInstanceCreation) expression).resolveConstructorBinding().getDeclaringClass().getQualifiedName();
+		}
+		JavaFileHelper javaFileHelper = javaFileHelpers.get(declaringClass);
+		return (TypeDeclaration)javaFileHelper.getCompilationUnit().types().get(0);
 	}
 }
