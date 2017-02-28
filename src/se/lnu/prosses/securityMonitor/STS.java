@@ -24,14 +24,6 @@ import org.jgrapht.ext.DOTExporter;
 import org.jgrapht.ext.EdgeNameProvider;
 import org.jgrapht.ext.VertexNameProvider;
 import org.jgrapht.graph.AbstractBaseGraph;
-//import org.project.automaton.Automaton;
-//import org.project.automaton.Edge;
-//import org.project.automaton.Event;
-//import org.project.automaton.Event.EventType;
-//import org.project.automaton.Expression;
-//import org.project.automaton.State;
-//import org.project.automaton.Variable;
-//import org.project.automaton.Variable.VariableType;
 
 @SuppressWarnings("serial")
 public class STS extends AbstractBaseGraph<Integer, Transition> implements DirectedGraph<Integer, Transition>{
@@ -41,6 +33,7 @@ public class STS extends AbstractBaseGraph<Integer, Transition> implements Direc
 	public Hashtable<Integer, String> securityLabelling;
 	
 	ArrayList<Object[]> securityPolicies;
+	ArrayList<String> securityInits;
 	
 	static final public String TAU = "TAU";
 	public static final String START = "START";
@@ -68,6 +61,7 @@ public class STS extends AbstractBaseGraph<Integer, Transition> implements Direc
 		controllableEvents.add(STS.PARAMETER);
 		this.securityLabelling = new Hashtable<>();
 		this.securityPolicies = new ArrayList<>();
+		this.securityInits = new ArrayList<>();
 	}
 	
 	public String addAction(String qualifiedMethodName){
@@ -81,6 +75,10 @@ public class STS extends AbstractBaseGraph<Integer, Transition> implements Direc
 	}
 	
 	public void setMonitorablePoint(String qualifiedMethodName){
+	}
+	
+	public void setEntryPoint(String qualifiedMethodName) {
+		
 	}
 	
 	@SuppressWarnings("unchecked")
@@ -785,18 +783,9 @@ public class STS extends AbstractBaseGraph<Integer, Transition> implements Direc
 	public void setSecurityPolicy(String securityPolicyExpression, Integer observationLocation) {
 		securityPolicies.add(new Object[]{observationLocation, securityPolicyExpression});	
 	}
-}
 
-class STSVertexNameProvider<V> implements VertexNameProvider<V>{
-	@Override
-	public String getVertexName(V vertex) {
-		return String.valueOf(((Integer)vertex));
-	}
-}
-
-class STSEdgeNameProvider<E> implements EdgeNameProvider<E>{
-	@Override
-	public String getEdgeName(E edge) {
-		return ((Transition)edge).toString();
+	public void setSecurityInit(String securityPolicyExpression) {
+		securityInits.add(securityPolicyExpression);
+		
 	}
 }

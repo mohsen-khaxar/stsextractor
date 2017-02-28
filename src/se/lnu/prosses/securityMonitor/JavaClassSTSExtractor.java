@@ -4,7 +4,6 @@ import java.util.Hashtable;
 import java.util.List;
 
 import org.eclipse.jdt.core.dom.ASTNode;
-import org.eclipse.jdt.core.dom.ASTVisitor;
 import org.eclipse.jdt.core.dom.Assignment;
 import org.eclipse.jdt.core.dom.Block;
 import org.eclipse.jdt.core.dom.ClassInstanceCreation;
@@ -51,7 +50,6 @@ public class JavaClassSTSExtractor {
 		}
 	}
 
-	@SuppressWarnings("unchecked")
 	private Integer processMethod(MethodDeclaration methodDeclaration) throws Exception {
 		int oldScopeId = parent.scopeId;
 		parent.scopeId++;
@@ -120,23 +118,22 @@ public class JavaClassSTSExtractor {
 			processObserve(dummyMethodInvocation, initialLocation);			
 		}else if(dummyMethodInvocation.getName().equals("init")){
 			processInit(dummyMethodInvocation);
+		}else if(dummyMethodInvocation.getName().equals("entryPoint")){
+			processEntryPoint(dummyMethodInvocation);
 		}else if(dummyMethodInvocation.getName().equals("monitorablePoint")){
 //			Nothing
 		}else{
 			throw new Exception(dummyMethodInvocation.getName() + " is not pre-defined.");
 		}
-//		 @SuppressWarnings("unchecked")
-//		List<StringLiteral> parameters = dummyMethodInvocation.arguments();
-//		 String variableName = "";
-//		if(RS.contains(parameters.get(0).getLiteralValue())){
-//			variableName = RS.get(parameters.get(0).getLiteralValue());
-//		}else {
-//			variableName = prefix + "_" + parameters.get(0).getLiteralValue().replaceAll("\\.", "_");
-//		}
-//		SL.put(variableName + "," + parameters.get(1).getLiteralValue(), parameters.get(2).getLiteralValue());
-//		sts.securityLabelling.put(initialLocation, (sts.securityLabelling.get(initialLocation)==null ? "" : sts.securityLabelling.get(initialLocation)) 
-//				+ "L" + parameters.get(1).getLiteralValue() + "_" + variableName + "=" + (parameters.get(2).getLiteralValue().equals("h") ? "true" : "false") + ";");
 		return initialLocation;
+	}
+
+	private void processEntryPoint(MethodInvocation dummyMethodInvocation) {
+		ASTNode parentNode = dummyMethodInvocation.getParent();
+		while(!(parentNode instanceof MethodDeclaration)){
+			parentNode = dummyMethodInvocation.getParent();
+		}
+		parent.sts.setEntryPoint(javaFileHelper.getQualifiedName((MethodDeclaration)parentNode));
 	}
 
 	private void processCheckPoint(MethodInvocation dummyMethodInvocation) {
@@ -147,43 +144,20 @@ public class JavaClassSTSExtractor {
 		parent.sts.setCheckPoint(javaFileHelper.getQualifiedName((MethodDeclaration)parentNode));
 	}
 
-	static Expression expressionInPolicy;
 	@SuppressWarnings("unchecked")
 	private void processObserve(MethodInvocation dummyMethodInvocation, Integer observationLocation) throws Exception {
 		List<StringLiteral> arguments = dummyMethodInvocation.arguments();
-		ASTNode parentNode = dummyMethodInvocation.getParent();
-		while(!(parentNode instanceof Block)){
-			parentNode = dummyMethodInvocation.getParent();
-		}
-		expressionInPolicy = null;
-		parentNode.accept(new ASTVisitor() {
-			@Override
-			public boolean preVisit2(ASTNode node) {
-				if(node.toString().replaceAll("\\s", "").equals(arguments.get(0).toString().replaceAll(" ", ""))){
-					expressionInPolicy = (Expression) node;
-					return false;
-				}else{
-					return true;
-				}
-			}
-		});
-		if(expressionInPolicy!=null){
-			String securityPolicyExpression = getSecurityExpression(parent.rename(expressionInPolicy), arguments.get(2).toString()) + "=";
-			securityPolicyExpression += arguments.get(1).toString().equals("H") ? "true" : "false";
-			parent.sts.setSecurityPolicy(securityPolicyExpression, observationLocation);
-		}else{
-			throw new Exception("There is no corresponding expression to " + arguments.get(0).toString());
-		}
-		
+		String securityPolicyExpression = getSecurityExpression(parent.rename(arguments.get(0)), arguments.get(2).toString()) + "=";
+		securityPolicyExpression += arguments.get(1).toString().equals("H") ? "true" : "false";
+		parent.sts.setSecurityPolicy(securityPolicyExpression, observationLocation);
 	}
 
+	@SuppressWarnings("unchecked")
 	private void processInit(MethodInvocation dummyMethodInvocation) {
 		List<StringLiteral> arguments = dummyMethodInvocation.arguments();
-		ASTNode parentNode = dummyMethodInvocation.getParent();
-		while(!(parentNode instanceof MethodDeclaration)){
-			parentNode = dummyMethodInvocation.getParent();
-		}
-		
+		String securityPolicyExpression = getSecurityExpression(parent.rename(arguments.get(0)), arguments.get(2).toString()) + "=";
+		securityPolicyExpression += arguments.get(1).toString().equals("H") ? "true" : "false";
+		parent.sts.setSecurityInit(securityPolicyExpression);
 	}
 
 	private Integer processReturnStatement(ReturnStatement returnStatement, Integer initialLocation) {
@@ -201,15 +175,15 @@ public class JavaClassSTSExtractor {
 		return finalLocation;
 	}
 	
-	private Integer processVariableDeclarationFragment(VariableDeclarationFragment variableDeclarationFragment, Integer initialLocation) {
+	private Integer processVariableDeclarationFragment(VariableDeclarationFragment variableDeclarationFragment, Integer initialLocation) throws Exception {
 		return processAssignmentLike(variableDeclarationFragment.getName(), variableDeclarationFragment.getInitializer(), initialLocation);
 	}
 	
-	private Integer processAssignment(Assignment assignment, Integer initialLocation) {
+	private Integer processAssignment(Assignment assignment, Integer initialLocation) throws Exception {
 		return processAssignmentLike(assignment.getLeftHandSide(), assignment.getRightHandSide(), initialLocation);
 	}
 	
-	private Integer processAssignmentLike(Expression leftHandSide, Expression rightHandSide, Integer initialLocation){
+	private Integer processAssignmentLike(Expression leftHandSide, Expression rightHandSide, Integer initialLocation) throws Exception{
 		Integer finalLocation = initialLocation;
 		if((rightHandSide instanceof MethodInvocation 
 				|| rightHandSide instanceof ClassInstanceCreation) 
@@ -231,7 +205,7 @@ public class JavaClassSTSExtractor {
 		return finalLocation;
 	}
 	
-	private Integer processMethodInvocation(Expression expression, Integer initialLocation) {
+	private Integer processMethodInvocation(Expression expression, Integer initialLocation) throws Exception {
 		String methodArgumentsUpdates = processMethodArguments(expression);
 		Integer finalLocation = parent.newLocation();
 		parent.sts.addTransition(initialLocation, finalLocation, javaFileHelper.getQualifiedName(expression), "true", methodArgumentsUpdates);
@@ -240,7 +214,7 @@ public class JavaClassSTSExtractor {
 	}
 	
 	@SuppressWarnings("unchecked")
-	private Integer processBlock(Block block, Integer initialLocation) {
+	private Integer processBlock(Block block, Integer initialLocation) throws Exception {
 		List<Statement> statements = block.statements();
 		Integer finalLocation = initialLocation;
 		for (Statement statement : statements) {
@@ -249,7 +223,7 @@ public class JavaClassSTSExtractor {
 		return finalLocation;
 	}
 	
-	private Integer processWhileStatement(WhileStatement whileStatement, Integer initialLocation) {
+	private Integer processWhileStatement(WhileStatement whileStatement, Integer initialLocation) throws Exception {
 		String whileExpression = parent.rename(whileStatement.getExpression());
 		int oldScopeId = parent.enterScope();
 		Integer loopEntranceLocation = parent.newLocation();
@@ -267,7 +241,7 @@ public class JavaClassSTSExtractor {
 		return loopExitLocation;
 	}
 
-	private Integer processIfStatement(IfStatement ifStatement, Integer initialLocation) {
+	private Integer processIfStatement(IfStatement ifStatement, Integer initialLocation) throws Exception {
 		String ifExpression = parent.rename(ifStatement.getExpression());
 		int oldScopeId = parent.enterScope();
 		Integer thenLocation = parent.newLocation();
@@ -335,7 +309,6 @@ public class JavaClassSTSExtractor {
 		return argumentAssignments;
 	}
 	
-	@SuppressWarnings("rawtypes")
 	private Hashtable<SimpleName, String> getRenamingRuleSet(List<SimpleName> parameters, List<Expression> arguments) {
 		Hashtable<SimpleName, String> renamingRuleSet = new Hashtable<>();
 		for (int i=0; i< arguments.size(); i++) {
