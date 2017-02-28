@@ -27,8 +27,11 @@ import java.util.regex.Pattern;
  * *}
  * *)
  * *\/ 
- * 
+ * \/*@ObservationPoint*\/
+ * \/*@EntryPoint*\/
  * \/*@CheckPoint*\/
+ * \/*@SecurityPolicy(securityLevel="..", policyType="...")*\/
+ * \/*@SecurityInit(securityLevel="..", policyType="...")*\/
  * 
  * Instead of the keywords expression, securityLevel, and policyType, it can be to use e, sl, and pt respectively.
  * Note that the security annotations must be just declared in comment blocks not comment line, otherwise they are ignored. 
@@ -50,32 +53,14 @@ public class CommentProcessor {
 	 */
 	static public void process(String javaFilePath) throws Exception {
 		String code = String.valueOf(Utils.readTextFile(javaFilePath));
-		String regex = 
-				"/\\*"
-					+ "[\\*\\s]*"
-					+ "@((ObservationPoint)|(Init))"
-					+ "[\\*\\s]*"
-					+ "\\("
-					+ "[\\*\\s]*"
-						+ "\\{"
-							+ "(" 
-							+ "[\\*\\s]*"
-								+ "@SecurityPolicy"	+ "[\\*\\s]*" + "\\([^\\)]*\\)"	+ "[\\*\\s]*"
-								+ ",??"
-							+ "[\\*\\s]*"
-							+ ")*"
-						+ "\\}"
-					+ "[\\*\\s]"
-					+ "*\\)"
-					+ "[\\*\\s]*"
-				+ "\\*/"
+		String regex = ""
+				+ "/\\*\\s*@\\s*(SecurityInit)\\s*[^\\)]+\\)\\s*\\*/" + "[^\\,;]+[\\,;]"
 				+ "|"
-				+ "/\\*"
-				+ "[\\*\\s]*"
-					+ "@CheckPoint"
-				+ "[\\*\\s]*"	
-				+ "\\*/"
-				+ "[^\\{]*\\{";
+				+ "/\\*\\s*@\\s*(SecurityPolicy)\\s*[^\\)]+\\)\\s*\\*/"	+ "[^\\,;]+[\\,;]"
+				+ "|"
+				+ "\\s*;\\s*/\\*\\s*@\\s*(ObservationPoint)\\s*\\*/" + "[^;]+;" 
+				+ "|"
+				+ "/\\*\\s*@\\s*((CheckPoint)|(EntryPoint))\\s*\\*/" + "[^\\{]*\\{";
 		Pattern pattern = Pattern.compile(regex);
         Matcher matcher = pattern.matcher(code);
         StringBuffer processedCode = new StringBuffer();
@@ -84,8 +69,8 @@ public class CommentProcessor {
         	String processed = "";
         	if(annotation.contains("ObservationPoint")){
         		processed = processObservationPoint(annotation);
-        	}else if(annotation.contains("Init")){
-        		processed = processInit(annotation);
+        	}else if(annotation.contains("EntryPoint")){
+        		processed = processEntryPoint(annotation);
         	}else if(annotation.contains("CheckPoint")){
         		processed = processCheckPoint(annotation);
         	}
@@ -95,6 +80,22 @@ public class CommentProcessor {
 		Utils.writeTextFile(javaFilePath, processedCode.toString());
 	}
 
+	private static String processSecurityInit(String annotation) throws Exception {
+		String wellOrderedParameters = getWellOrderedParameters(annotation);
+		String processed = annotation.replaceAll("/\\*\\s*@\\s*(SecurityInit)\\s*[^\\)]+\\)\\s*\\*/", "");
+		processed = "se.lnu.DummyMethods.init(" + processed.substring(0, annotation.length()-1).split("\\s*")[1]
+				+ ", " + wellOrderedParameters	+ ")";
+		return processed;
+	}
+
+	private static String processSecurityPolicy(String annotation) throws Exception {
+		String wellOrderedParameters = getWellOrderedParameters(annotation);
+		String processed = annotation.replaceAll("/\\*\\s*@\\s*(SecurityPolicy)\\s*[^\\)]+\\)\\s*\\*/", "");
+		processed = "se.lnu.DummyMethods.observe(" + processed.substring(0, annotation.length()-1)
+				+ ", " + wellOrderedParameters	+ ")";
+		return processed;
+	}
+
 	/**
 	 * It extracts all the security policies declared in an initialization and then maps each of them to a proper statement 
 	 * invoking the methods \"se.lnu.securityPolicy.init\".
@@ -102,15 +103,36 @@ public class CommentProcessor {
 	 * @return one or more statements invoking the methods \"se.lnu.securityPolicy.observe\"
 	 * @throws Exception is thrown when some parameters of a security policy were wrongly defined
 	 */
-	private static String processInit(String init) throws Exception {
-		String securityPolicies = init.substring(init.indexOf("{"), init.lastIndexOf("}"));
-		String regex = "@SecurityPolicy[\\*\\s]*\\([^\\)]*\\)";
+	private static String processEntryPoint(String entryPoint) throws Exception {
+		String processed = entryPoint.replace("/\\*\\s*@\\s*(EntryPoint)\\s*\\*/", "");
+		boolean isCheckPoint = false;
+		if(entryPoint.matches("/\\*\\s*@\\s*(CheckPoint)\\s*\\*/.+")){
+			processed = entryPoint.replace("/\\*\\s*@\\s*(CheckPoint)\\s*\\*/", "");
+			isCheckPoint = true;
+		}
+		String methodName = processed.replace("\\s*\\(", "(");
+		methodName = methodName.replaceAll("\\s+", " ");
+		methodName = methodName.substring(0, processed.indexOf("(")-1);
+		String[] parts = processed.split(" ");
+		methodName = parts[parts.length-1];
+		processed += "se.lnu.DummyMethods.entryPoint(\"" + methodName + "\");";
+		if(isCheckPoint){
+			processed += "se.lnu.DummyMethods.checkPoint(\"" + methodName + "\");";
+		}
+		
+		String regex = "/\\*\\s*@\\s*(SecurityInit)\\s*[^\\)]+\\)\\s*\\*/[^\\,]+[\\,]";
 		Pattern pattern = Pattern.compile(regex);
-        Matcher matcher = pattern.matcher(securityPolicies);
-        String processed = "";
-        while(matcher.find()){
-        	processed += makeSecurityPolicyMethodInvocation(matcher.group(), "init") + "\n";
+        Matcher matcher = pattern.matcher(processed);
+        StringBuffer stringBuffer = new StringBuffer();
+        String inits = "";
+        while (matcher.find()) {
+        	String annotation = matcher.group();
+        	inits += processSecurityInit(annotation);
+        	annotation = annotation.replaceAll("/\\*\\s*@\\s*(SecurityInit)\\s*[^\\)]+\\)\\s*\\*/", "");
+        	matcher.appendReplacement(stringBuffer, annotation);
         }
+        matcher.appendTail(stringBuffer);
+        processed = stringBuffer.toString() + inits;
 		return processed;
 	}
 
@@ -121,13 +143,21 @@ public class CommentProcessor {
 	 * @return the constant string \"se.lnu.checkPoint();\"
 	 */
 	private static String processCheckPoint(String checkPoint) {
-		String processed = checkPoint.replace("/\\*[\\*\\s]*@CheckPoint[\\*\\s]*\\*/", "");
+		String processed = checkPoint.replace("/\\*\\s*@\\s*(CheckPoint)\\s*\\*/", "");
+		boolean isEntryPoint = false;
+		if(checkPoint.matches("/\\*\\s*@\\s*(EntryPoint)\\s*\\*/.+")){
+			processed = checkPoint.replace("/\\*\\s*@\\s*(EntryPoint)\\s*\\*/", "");
+			isEntryPoint = true;
+		}
 		String methodName = processed.replace("\\s*\\(", "(");
-		methodName = methodName.replaceAll("\\s", " ").replaceAll("  ", "");
+		methodName = methodName.replaceAll("\\s+", " ");
 		methodName = methodName.substring(0, processed.indexOf("(")-1);
 		String[] parts = processed.split(" ");
 		methodName = parts[parts.length-1];
 		processed += "se.lnu.DummyMethods.checkPoint(\"" + methodName + "\");";
+		if(isEntryPoint){
+			processed += "se.lnu.DummyMethods.entryPoint(\"" + methodName + "\");";
+		}
 		return processed;
 	}
 
@@ -139,35 +169,22 @@ public class CommentProcessor {
 	 * @throws Exception is thrown when some parameters of a security policy were wrongly defined
 	 */
 	private static String processObservationPoint(String observationPoint) throws Exception {
-		String securityPolicies = observationPoint.substring(observationPoint.indexOf("{"), observationPoint.lastIndexOf("}"));
-		String regex = "@SecurityPolicy[\\*\\s]*\\([^\\)]*\\)";
+		String processed = observationPoint.replace("\\s*/\\*\\s*@\\s*(ObservationPoint)\\s*\\*/", "");
+		String regex = "/\\*\\s*@\\s*(SecurityPolicy)\\s*[^\\)]+\\)\\s*\\*/[^\\,\\)]+[\\,\\)]";
 		Pattern pattern = Pattern.compile(regex);
-        Matcher matcher = pattern.matcher(securityPolicies);
-        String processed = "";
-        while(matcher.find()){
-        	processed += makeSecurityPolicyMethodInvocation(matcher.group(), "observe") + "\n";
+        Matcher matcher = pattern.matcher(processed);
+        StringBuffer stringBuffer = new StringBuffer();
+        String observes = "";
+        while (matcher.find()) {
+        	String annotation = matcher.group();
+        	observes += processSecurityPolicy(annotation);
+        	annotation = annotation.replaceAll("/\\*\\s*@\\s*(SecurityPolicy)\\s*[^\\)]+\\)\\s*\\*/", "");
+        	matcher.appendReplacement(stringBuffer, annotation);
         }
+        matcher.appendTail(stringBuffer);
+        processed = stringBuffer.toString();
+        processed = observes + processed;
 		return processed;
-	}
-
-	/**
-	 * It parses a declared security policy in order to sort declared parameters based on the parameters order of 
-	 * the methods \"se.lnu.securityPolicy.observe\" or \"se.lnu.securityPolicy.init\" 
-	 * and then returns a statement invoking a proper method with declared parameters in the security policy.
-	 * @param annotation a security policy that is declared inside an observation point or initialization
-	 * @param method determines which method must be invoked in the generated statement
-	 * @return an invocation of the method \"se.lnu.SecurityPolicy\" with declared parameters in the security policy
-	 * @throws Exception is thrown when some parameters of a security policy were wrongly defined
-	 */
-	static private String makeSecurityPolicyMethodInvocation(String annotation, String method) throws Exception {
-		String[] wellOrderedParameters = getWellOrderedParameters(annotation);
-		String SecurityPolicyMethodInvocation = "se.lnu.DummyMethods."
-				+ method
-				+ "("
-				+ "\"" + wellOrderedParameters[0] + "\", "
-				+ "\"" + wellOrderedParameters[1] + "\", "
-				+ "\"" + wellOrderedParameters[2] + ");";
-		return SecurityPolicyMethodInvocation;
 	}
 
 	/**
@@ -176,25 +193,23 @@ public class CommentProcessor {
 	 * @return sorted the security policy parameters based on the parameters order of the methods \"se.lnu.securityPolicy.init\" or \"se.lnu.securityPolicy.observe\".
 	 * @throws Exception is thrown when some parameters of a security policy were wrongly defined
 	 */
-	static private String[] getWellOrderedParameters(String annotation) throws Exception {
-		String annotationParameters = annotation.replaceFirst("//\\s*@SecurityPolicy\\s*\\(", "");
-		annotationParameters = annotationParameters.substring(0, annotationParameters.length()-1);
+	static private String getWellOrderedParameters(String annotation) throws Exception {
+		String annotationParameters = annotation.replaceFirst("//\\s*@((SecurityPolicy)|(SecurityInit))\\s*\\(", "");
+		annotationParameters = annotationParameters.substring(0, annotationParameters.indexOf(")"));
 		annotationParameters = annotationParameters.substring(annotationParameters.indexOf("\""), annotationParameters.lastIndexOf("\""));
 		String[] wellOrderedParameters = new String[3];
 		String[] parameters = annotationParameters.split("\"\\s*,\\s*\"");
 		for (String parameter : parameters) {
 			String name = parameter.substring(0, parameter.indexOf("="));
 			String value = parameter.substring(parameter.indexOf("="), parameter.length());
-			if(name.equals("expression") || name.equals("e")){
+			if(name.equals("securityLevel") || name.equals("sl")){
 				wellOrderedParameters[0] = value; 
-			}else if(name.equals("securityLevel") || name.equals("sl")){
-				wellOrderedParameters[1] = value; 
 			}else if(name.equals("policyType") || name.equals("pt")){
-				wellOrderedParameters[2] = value;
+				wellOrderedParameters[1] = value;
 			}else {
 				throw new Exception(name + " was wrongly defined in the following security policy : " + annotation);
 			}
 		}
-		return wellOrderedParameters;
+		return wellOrderedParameters[0] + ", " + wellOrderedParameters[1];
 	}
 }

@@ -47,7 +47,7 @@ import org.eclipse.jdt.core.dom.WhileStatement;
 
 public class JavaProjectSTSExtractor {
 	JavaProjectHelper javaProjectHelper;
-	Stack<String> returnExpression;
+	Stack<String> returnTarget;
 	Stack<Hashtable<SimpleName, String>> renamingRuleSets;
 	int newLocation = 2;
 	int pcLevel = 0;
@@ -818,5 +818,4 @@ public class JavaProjectSTSExtractor {
 	public String getLPCUniqueName() {
 		return "LPC" + scopeId;
 	}
-
 }

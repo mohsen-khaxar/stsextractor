@@ -34,6 +34,7 @@ public class JavaFileHelper {
 	String javaFilePath;
 	CompilationUnit compilationUnit;
 	ASTRewrite astRewrite;
+	String DUMMY_METHODS_CLASS = "se.lnu.DummyMethods.";
 	
 	public JavaFileHelper(String sourcePath, String[] classPath, String javaFilePath, JavaProjectHelper parent) {
 		this.sourcePath = new String[]{sourcePath};
@@ -230,5 +231,9 @@ public class JavaFileHelper {
 	public Block getMethodBody(Expression expression) {
 		MethodDeclaration methodDeclaration = getMethodDeclaration(expression);
 		return methodDeclaration.getBody();
+	}
+
+	public boolean isDummyMethod(Expression expression) {
+		return getQualifiedName(expression).startsWith(DUMMY_METHODS_CLASS);
 	}
 }

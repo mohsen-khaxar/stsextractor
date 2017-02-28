@@ -40,6 +40,8 @@ public class STS extends AbstractBaseGraph<Integer, Transition> implements Direc
 	Set<String> controllableEvents;
 	public Hashtable<Integer, String> securityLabelling;
 	
+	ArrayList<Object[]> securityPolicies;
+	
 	static final public String TAU = "TAU";
 	public static final String START = "START";
 	public static final String RETURN = "RETURN";
@@ -65,6 +67,7 @@ public class STS extends AbstractBaseGraph<Integer, Transition> implements Direc
 		controllableEvents.add(STS.RETURN);
 		controllableEvents.add(STS.PARAMETER);
 		this.securityLabelling = new Hashtable<>();
+		this.securityPolicies = new ArrayList<>();
 	}
 	
 	public String addAction(String qualifiedMethodName){
@@ -777,6 +780,10 @@ public class STS extends AbstractBaseGraph<Integer, Transition> implements Direc
 		}
 		Transition transition = new Transition(action, guard, update);
 		this.addEdge(source, source, transition);
+	}
+
+	public void setSecurityPolicy(String securityPolicyExpression, Integer observationLocation) {
+		securityPolicies.add(new Object[]{observationLocation, securityPolicyExpression});	
 	}
 }
 
