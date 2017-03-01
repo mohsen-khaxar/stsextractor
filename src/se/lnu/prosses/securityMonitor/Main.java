@@ -1,13 +1,13 @@
 package se.lnu.prosses.securityMonitor;
 
-import java.io.File;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.Set;
 
 public class Main {
 	public static void main(String[] args) throws Exception {
-		String directoryPath = "/home/mohsen/git/runningexample/src";
+		String sourcePath = "/home/mohsen/git/runningexample/src";
+		String targetPath = "/home/mohsen/git/runningexample/";
 		String[] classPath = new String[]{"/home/mohsen/git/runningexample/src", "/home/mohsen/git/stsextractor/src"};
 		ArrayList<String> includingFilter = new ArrayList<String>();
 		ArrayList<String> entryPoints = new ArrayList<>();
@@ -18,14 +18,9 @@ public class Main {
 		entryPoints.add(".*\\.main");
 		controllableMethodNames.add("se.lnu.CaseStudy.estimatLocation");
 
-		JavaProjectSTSExtractor stsExtractor = new JavaProjectSTSExtractor(includingFilter, excludingFilter , entryPoints, controllableMethodNames);
-		stsExtractor.extract(directoryPath, classPath, controllableMethodNames);
-		stsExtractor.sts.propagateInitialValues();
-		stsExtractor.sts.saveAsDot(directoryPath + File.separator + "model.dot");
-		STS controlledSTS = stsExtractor.generateControlledSTS();
-		controlledSTS.saveAsDot("/home/mohsen/git/runningexample/aspects/modelc.dot");
-		controlledSTS = controlledSTS.convertToUncontrollableFreeSTS();
-		controlledSTS.saveAsDot("/home/mohsen/git/runningexample/aspects/freemodelc.dot");
-		controlledSTS.generateAspect(directoryPath, "/home/mohsen/git/runningexample/aspects");
+		JavaProjectSTSExtractor stsExtractor = new JavaProjectSTSExtractor(sourcePath, classPath, includingFilter, excludingFilter, targetPath);
+		STSHelper stsHelper = stsExtractor.extract();
+		SecurityMonitorSynthesizer securityMonitorSynthesizer = new SecurityMonitorSynthesizer(stsHelper, targetPath);
+		securityMonitorSynthesizer.synthesize();
 	}
 }

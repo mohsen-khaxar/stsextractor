@@ -44,8 +44,7 @@ public class JavaClassSTSExtractor {
 					&& methodDeclaration.getBody() != null 
 					&& (methodModifier.contains("public") || methodModifier.contains("protected"))) {
 				Integer finalLocation = processMethod(methodDeclaration);
-				Transition transition = new Transition(STS.TAU, "true", "");
-				parent.sts.addEdge(finalLocation, 2, transition);
+				parent.stsHelper.addTransition(finalLocation, 2, STS.TAU, "true", "");
 			}
 		}
 	}
@@ -55,8 +54,8 @@ public class JavaClassSTSExtractor {
 		parent.scopeId++;
 		Integer location = parent.newLocation();
 		String qualifiedMethodName = javaFileHelper.getQualifiedName(methodDeclaration);
-		String action = parent.sts.addAction(qualifiedMethodName);
-		parent.sts.addTransition(1, location, action, "true", "");
+		String action = parent.stsHelper.addAction(qualifiedMethodName);
+		parent.stsHelper.addTransition(1, location, action, "true", "");
 		location = processStatement(methodDeclaration.getBody(), location);
 		parent.scopeId = oldScopeId;
 		return location;
@@ -133,7 +132,7 @@ public class JavaClassSTSExtractor {
 		while(!(parentNode instanceof MethodDeclaration)){
 			parentNode = dummyMethodInvocation.getParent();
 		}
-		parent.sts.setEntryPoint(javaFileHelper.getQualifiedName((MethodDeclaration)parentNode));
+		parent.stsHelper.setEntryPoint(javaFileHelper.getQualifiedName((MethodDeclaration)parentNode));
 	}
 
 	private void processCheckPoint(MethodInvocation dummyMethodInvocation) {
@@ -141,7 +140,7 @@ public class JavaClassSTSExtractor {
 		while(!(parentNode instanceof MethodDeclaration)){
 			parentNode = dummyMethodInvocation.getParent();
 		}
-		parent.sts.setCheckPoint(javaFileHelper.getQualifiedName((MethodDeclaration)parentNode));
+		parent.stsHelper.setCheckPoint(javaFileHelper.getQualifiedName((MethodDeclaration)parentNode));
 	}
 
 	@SuppressWarnings("unchecked")
@@ -149,7 +148,7 @@ public class JavaClassSTSExtractor {
 		List<StringLiteral> arguments = dummyMethodInvocation.arguments();
 		String securityPolicyExpression = getSecurityExpression(parent.rename(arguments.get(0)), arguments.get(2).toString()) + "=";
 		securityPolicyExpression += arguments.get(1).toString().equals("H") ? "true" : "false";
-		parent.sts.setSecurityPolicy(securityPolicyExpression, observationLocation);
+		parent.stsHelper.setSecurityPolicy(securityPolicyExpression, observationLocation);
 	}
 
 	@SuppressWarnings("unchecked")
@@ -157,7 +156,7 @@ public class JavaClassSTSExtractor {
 		List<StringLiteral> arguments = dummyMethodInvocation.arguments();
 		String securityPolicyExpression = getSecurityExpression(parent.rename(arguments.get(0)), arguments.get(2).toString()) + "=";
 		securityPolicyExpression += arguments.get(1).toString().equals("H") ? "true" : "false";
-		parent.sts.setSecurityInit(securityPolicyExpression);
+		parent.stsHelper.setSecurityInit(securityPolicyExpression);
 	}
 
 	private Integer processReturnStatement(ReturnStatement returnStatement, Integer initialLocation) {
@@ -170,7 +169,7 @@ public class JavaClassSTSExtractor {
 			String update = target + "=" + returnedExpression + ";";
 			update += "LX_" + target + "=" + getSecurityExpression(returnedExpression, "X") + ";";
 			update += "LI_" + target + "=" + getSecurityExpression(returnedExpression, "I") + " or LPC;";
-			parent.sts.addTransition(initialLocation, finalLocation, STS.TAU, "true", update);
+			parent.stsHelper.addTransition(initialLocation, finalLocation, STS.TAU, "true", update);
 		}
 		return finalLocation;
 	}
@@ -190,7 +189,7 @@ public class JavaClassSTSExtractor {
 				&& !isThirdParty(rightHandSide)){
 			String methodArgumentsUpdates = processMethodArguments(rightHandSide);
 			finalLocation = parent.newLocation();
-			parent.sts.addTransition(initialLocation, finalLocation, javaFileHelper.getQualifiedName(rightHandSide), "true", methodArgumentsUpdates);
+			parent.stsHelper.addTransition(initialLocation, finalLocation, javaFileHelper.getQualifiedName(rightHandSide), "true", methodArgumentsUpdates);
 			parent.returnTarget.push(parent.rename(leftHandSide));
 			finalLocation = processBlock(javaFileHelper.getMethodBody(rightHandSide), finalLocation);
 		}else{
@@ -200,7 +199,7 @@ public class JavaClassSTSExtractor {
 			String update = leftHandExpression + "=" + rightHandExpression + ";";
 			update += "LX_" + leftHandExpression + "=" + getSecurityExpression(rightHandExpression, "X") + ";";
 			update += "LI_" + leftHandExpression + "=" + getSecurityExpression(rightHandExpression, "I") + " or LPC;";
-			parent.sts.addTransition(initialLocation, finalLocation, STS.TAU, "true", update);
+			parent.stsHelper.addTransition(initialLocation, finalLocation, STS.TAU, "true", update);
 		}
 		return finalLocation;
 	}
@@ -208,7 +207,7 @@ public class JavaClassSTSExtractor {
 	private Integer processMethodInvocation(Expression expression, Integer initialLocation) throws Exception {
 		String methodArgumentsUpdates = processMethodArguments(expression);
 		Integer finalLocation = parent.newLocation();
-		parent.sts.addTransition(initialLocation, finalLocation, javaFileHelper.getQualifiedName(expression), "true", methodArgumentsUpdates);
+		parent.stsHelper.addTransition(initialLocation, finalLocation, javaFileHelper.getQualifiedName(expression), "true", methodArgumentsUpdates);
 		finalLocation = processBlock(javaFileHelper.getMethodBody(expression), finalLocation);
 		return finalLocation;
 	}
@@ -229,14 +228,14 @@ public class JavaClassSTSExtractor {
 		Integer loopEntranceLocation = parent.newLocation();
 		String lpcStackVariable = parent.getLPCUniqueName();
 		String lpcUpdate = lpcStackVariable + "=LPC;" + "LPC=" + getSecurityExpression(whileExpression, "I") + " or LPC;";
-		parent.sts.addTransition(initialLocation, loopEntranceLocation, STS.TAU, whileExpression, lpcUpdate);
+		parent.stsHelper.addTransition(initialLocation, loopEntranceLocation, STS.TAU, whileExpression, lpcUpdate);
 		Integer finalLocationInLoop = processStatement(whileStatement.getBody(), loopEntranceLocation);
-		parent.sts.addTransition(finalLocationInLoop, initialLocation, STS.TAU, "true", "LPC=" + lpcStackVariable + ";");
+		parent.stsHelper.addTransition(finalLocationInLoop, initialLocation, STS.TAU, "true", "LPC=" + lpcStackVariable + ";");
 		Integer loopExitLocation = parent.newLocation();
-		parent.sts.addTransition(initialLocation, loopExitLocation, STS.TAU, "  not (" + whileExpression + ")", 
+		parent.stsHelper.addTransition(initialLocation, loopExitLocation, STS.TAU, "  not (" + whileExpression + ")", 
 				lpcUpdate + getSecurityExpressionForPossibleModifieds(whileStatement.getBody()));
 		Integer finalLocation = parent.newLocation();
-		parent.sts.addTransition(loopExitLocation, finalLocation, STS.TAU, "true", "LPC=" + lpcStackVariable + ";");
+		parent.stsHelper.addTransition(loopExitLocation, finalLocation, STS.TAU, "true", "LPC=" + lpcStackVariable + ";");
 		parent.exitScope(oldScopeId);
 		return loopExitLocation;
 	}
@@ -247,10 +246,10 @@ public class JavaClassSTSExtractor {
 		Integer thenLocation = parent.newLocation();
 		String lpcStackVariable = parent.getLPCUniqueName();
 		String lpcUpdate = lpcStackVariable	+ "=LPC;" + "LPC=" + getSecurityExpression(ifExpression, "I") + " or LPC;";
-		parent.sts.addTransition(initialLocation, thenLocation, STS.TAU, ifExpression, 
+		parent.stsHelper.addTransition(initialLocation, thenLocation, STS.TAU, ifExpression, 
 				lpcUpdate + getSecurityExpressionForPossibleModifieds(ifStatement.getElseStatement()));
 		Integer elseLocation = parent.newLocation();
-		parent.sts.addTransition(initialLocation, elseLocation, STS.TAU, "not (" + ifExpression + ")", 
+		parent.stsHelper.addTransition(initialLocation, elseLocation, STS.TAU, "not (" + ifExpression + ")", 
 				lpcUpdate + getSecurityExpressionForPossibleModifieds(ifStatement.getThenStatement()));
 		Integer finalThenLocation = processStatement(ifStatement.getThenStatement(), thenLocation);
 		Integer finalElseLocation = elseLocation;
@@ -258,8 +257,8 @@ public class JavaClassSTSExtractor {
 			finalElseLocation = processStatement(ifStatement.getElseStatement(), elseLocation);
 		}
 		Integer finalLocation = parent.newLocation();
-		parent.sts.addTransition(finalThenLocation, finalLocation, STS.TAU, "true", "LPC=" + lpcStackVariable + ";");
-		parent.sts.addTransition(finalElseLocation, finalLocation, STS.TAU, "true", "LPC=" + lpcStackVariable + ";");
+		parent.stsHelper.addTransition(finalThenLocation, finalLocation, STS.TAU, "true", "LPC=" + lpcStackVariable + ";");
+		parent.stsHelper.addTransition(finalElseLocation, finalLocation, STS.TAU, "true", "LPC=" + lpcStackVariable + ";");
 		parent.exitScope(oldScopeId);
 		return finalLocation;
 	}

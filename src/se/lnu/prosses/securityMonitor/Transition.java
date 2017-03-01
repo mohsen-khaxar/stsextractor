@@ -42,6 +42,14 @@ public class Transition extends DefaultEdge {
 		this.update = update;
 	}
 	
+	public Integer getSource() {
+		return Integer.valueOf(this.getSource());
+	}
+	
+	public Integer getTarget() {
+		return Integer.valueOf(this.getTarget());
+	}
+	
 	@Override
 	public String toString() {
 		return "<" + action + ", " + guard.replaceAll("\"", "'") + ", " + update.replaceAll("\"", "'") + ">";
