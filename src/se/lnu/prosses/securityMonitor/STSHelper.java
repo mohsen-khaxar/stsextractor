@@ -16,22 +16,16 @@ public class STSHelper {
 	HashSet<String> variables;
 	public ArrayList<Object[]> securityPolicies;
 	public ArrayList<String> securityInits;
-	
-	public Set<String> controllableMethodNames;
-	public Hashtable<Integer, String> securityLabelling;
+	Hashtable<String, String> actionMethodMap;
 	STS sts;
 	public STSHelper(STS sts) {
 		this.sts = sts;
 		this.variables = new HashSet<>();
 		controllableActions = new HashSet<>();
-		for (String controllableMethodName : this.controllableMethodNames) {
-			controllableMethodName = controllableMethodName.replaceAll("\\.", "_");
-			controllableActions.add(controllableMethodName);
-		}
 		controllableActions.add(STS.START);
 		controllableActions.add(STS.RETURN);
 		controllableActions.add(STS.PARAMETER);
-		this.securityLabelling = new Hashtable<>();
+		actionMethodMap = new Hashtable<>();
 		this.securityPolicies = new ArrayList<>();
 		this.securityInits = new ArrayList<>();
 	}
@@ -43,8 +37,14 @@ public class STSHelper {
 		writer.close();
 	}
 	
+	public String getQualifiedMethodName(String action){
+		return actionMethodMap.get(action);
+	}
+	
 	public String addAction(String qualifiedMethodName){
-		return "";
+		String action = "";
+		actionMethodMap.put(action, qualifiedMethodName);
+		return action;
 	}
 	
 	public void setCheckPoint(String qualifiedMethodName){
@@ -114,5 +114,17 @@ public class STSHelper {
 		ArrayList<Integer> locations = new ArrayList<>();
 		locations.addAll(sts.vertexSet());
 		return locations;
+	}
+
+	public List<Transition> getOutgoingTransitions(Integer location) {
+		ArrayList<Transition> outgoingTransitions = new ArrayList<>();
+		outgoingTransitions.addAll(sts.outgoingEdgesOf(location));
+		return outgoingTransitions;
+	}
+
+	public List<Transition> getIncomingTransitions(Integer location) {
+		ArrayList<Transition> incomingTransitions = new ArrayList<>();
+		incomingTransitions.addAll(sts.incomingEdgesOf(location));
+		return incomingTransitions;
 	}
 }
