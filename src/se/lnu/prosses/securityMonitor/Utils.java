@@ -64,4 +64,16 @@ public class Utils {
 		}
 		return res;
 	}
+
+	public static void remakeDirectory(String dirPath) throws IOException {
+		deleteDirectory(new File(dirPath));
+		new File(dirPath).mkdirs();
+	}
+	
+	static void deleteDirectory(File file) throws IOException {
+		  if (file.isDirectory()) {
+		    for (File file1 : file.listFiles())
+		    	deleteDirectory(file1);
+		  }
+	}
 }

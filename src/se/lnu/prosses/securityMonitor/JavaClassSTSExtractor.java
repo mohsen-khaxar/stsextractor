@@ -44,7 +44,7 @@ public class JavaClassSTSExtractor {
 					&& methodDeclaration.getBody() != null 
 					&& (methodModifier.contains("public") || methodModifier.contains("protected"))) {
 				Integer finalLocation = processMethod(methodDeclaration);
-				parent.stsHelper.addTransition(finalLocation, 2, STS.TAU, "true", "");
+				parent.stsHelper.addTransition(finalLocation, 0, STS.TAU, "true", "");
 			}
 		}
 	}
@@ -211,12 +211,12 @@ public class JavaClassSTSExtractor {
 		parent.stsHelper.addTransition(initialLocation, intermediateLocation, STS.TAU, "true", methodArgumentsUpdates);
 		Integer finalLocation = parent.newLocation();
 		String action = parent.stsHelper.addAction(javaFileHelper.getQualifiedName(expression));
-		String extraData = "";
 		Hashtable<SimpleName, String> renamingRuleSet = parent.renamingRuleSets.peek();
+		Hashtable<String, String> argumentParameterMap = new Hashtable<>();
 		for (SimpleName parameter : renamingRuleSet.keySet()) {
-			extraData += parent.getUniqueName(parameter) + "=" + renamingRuleSet.get(parameter) + ";";
+			argumentParameterMap.put(parent.getUniqueName(parameter), renamingRuleSet.get(parameter));
 		}
-		parent.stsHelper.addTransition(intermediateLocation, finalLocation, action, "true", "", extraData);
+		parent.stsHelper.addTransition(intermediateLocation, finalLocation, action, "true", "", argumentParameterMap);
 		finalLocation = processBlock(javaFileHelper.getMethodBody(expression), finalLocation);
 		return finalLocation;
 	}

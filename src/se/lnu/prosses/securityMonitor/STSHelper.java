@@ -13,6 +13,7 @@ public class STSHelper implements Cloneable{
 	public HashSet<String> controllableActions;
 	public HashSet<String> monitorableActions;
 	HashSet<String> variables;
+	public Hashtable<String, String> uniqueNameJavaNameMap;
 	public ArrayList<Object[]> securityPolicies;
 	public ArrayList<String> securityInits;
 	Hashtable<String, String> actionMethodMap;
@@ -20,11 +21,9 @@ public class STSHelper implements Cloneable{
 	public STSHelper(STS sts) {
 		this.sts = sts;
 		this.variables = new HashSet<>();
+		this.uniqueNameJavaNameMap = new Hashtable<>();
 		controllableActions = new HashSet<>();
 		monitorableActions = new HashSet<>();
-		monitorableActions.add(STS.START);
-		monitorableActions.add(STS.RETURN);
-		monitorableActions.add(STS.PARAMETER);
 		monitorableActions.add(addAction("se.lnu.DummyMethods.monitorablePoint"));
 		actionMethodMap = new Hashtable<>();
 		this.securityPolicies = new ArrayList<>();
@@ -68,7 +67,7 @@ public class STSHelper implements Cloneable{
 		
 	}
 	
-	public void addTransition(Integer source, Integer target, String action, String guard, String update, String extraData) {
+	public void addTransition(Integer source, Integer target, String action, String guard, String update, Object extraData) {
 		addTransition(source, target, new Transition(action, guard, update, extraData));
 	}
 	
@@ -157,5 +156,9 @@ public class STSHelper implements Cloneable{
 
 	public void removeAllTransitions(Integer source, Integer target) {
 		sts.removeAllEdges(source, target);
+	}
+	
+	public String getJavaName(String uniqueName){
+		return uniqueNameJavaNameMap.get(uniqueName);
 	}
 }

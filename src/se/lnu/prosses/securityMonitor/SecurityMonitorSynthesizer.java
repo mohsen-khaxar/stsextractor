@@ -187,170 +187,7 @@ public class SecurityMonitorSynthesizer {
         return stringBuffer.toString();
 	}
 	
-	@SuppressWarnings("unchecked")
-	public void generateAspect(String sourcePath, String targetPath) throws IOException{
-		Hashtable<String, TypeDeclaration> classes = getClasses(sourcePath);
-		HashSet<String> methodNames = new HashSet<>();
-		methodNames.addAll(controllableMethodNames);
-		methodNames.add("se.lnu.CaseStudy.dummy1");
-		methodNames.add("se.lnu.CaseStudy.dummy2");
-		for (String controllableMethodName : methodNames) {
-			MethodDeclaration methodDeclaration = getMethodDeclaration(classes, controllableMethodName);
-			String parameters = methodDeclaration.parameters().toString().replace("[", "").replace("]", "");
-			String parameterNames = "";
-			String[] parts = parameters.replaceAll(" ,", ",").replaceAll("  ", " ").split(" ");
-			for (int i = 1; i < parts.length; i+=2) {
-				parameterNames += parts[i];
-			}
-			String className = controllableMethodName.substring(0, controllableMethodName.lastIndexOf("."));
-			FileWriter fileWriter = new FileWriter(targetPath + File.separator + controllableMethodName.replaceAll("\\.", "") + "Monitor.aj");
-			fileWriter.write("import " + className + ";\n");
-			fileWriter.write("import se.lnu.MonitorHelper;\n");
-			fileWriter.write("public aspect " + controllableMethodName.replaceAll("\\.", "") + "Monitor{\n");
-			fileWriter.write("pointcut pc() : call(* " + controllableMethodName + "(..));\n");
-			fileWriter.write(methodDeclaration.getReturnType2().toString() + " around(" + parameters + ", " + className + " target) : pc() && target(target) && args(" + parameterNames + ") {\n");
-//			fileWriter.write("MonitorHelperImpl monitorHelper = new MonitorHelperImpl();\n");
-//			fileWriter.write("try {monitorHelper = (MonitorHelper)Class.forName(\"se.lnu.MonitorHelperImpl\").newInstance();} catch (Exception e) {e.printStackTrace();}\n");
-			fileWriter.write("Integer MonitorInstanceId = MonitorHelper.getMonitorInstanceId(thisJoinPoint, thisJoinPointStaticPart, thisEnclosingJoinPointStaticPart);\n");
-			fileWriter.write("Integer currentLocation = MonitorHelper.getCurrentLocation(monitorInstanceId);\n");
-			fileWriter.write("Object[] res = null;\n");
-			fileWriter.write("\tboolean violation=false;\n");
-			boolean check = false;
-			for (Transition transition : sts.edgeSet()) {
-				if(transition.getAction().equals(controllableMethodName.replaceAll("\\.", "_")) && sts.getEdgeSource(transition)>=0){
-					check = true;
-					fileWriter.write("if(currentLocation==" + sts.getEdgeSource(transition) + " && " + 
-					convertToJavaSyntax(transition.getGuard(), methodDeclaration.parameters(), getArgumentParameterMap(transition.getUpdate())) + "){\n");
-					if(sts.getEdgeTarget(transition)==0){
-						fileWriter.write("\tMonitorHelper.removeMonitorInstanceId(monitorInstanceId);\n");
-					}else if(sts.getEdgeTarget(transition)<0){
-						fileWriter.write("\tcurrentLocation = " + sts.getEdgeTarget(transition) + ";\n");
-						fileWriter.write("\tviolation=true;\n");
-					}else {
-						fileWriter.write("\tcurrentLocation = " + sts.getEdgeTarget(transition) + ";\n");
-					}
-					fileWriter.write("}else ");
-				}
-			}
-			if(check){
-				fileWriter.write("{ throw new Exception(\"Safty Violation\");}\n");
-			}
-			fileWriter.write("\n");
-			for (Transition transition : sts.edgeSet()) {
-				if(transition.getAction().equals(controllableMethodName.replaceAll("\\.", "_")) && sts.getEdgeSource(transition)<0){
-					check = true;
-					fileWriter.write("if(currentLocation==" + sts.getEdgeSource(transition) + " && " + 
-					convertToJavaSyntax(transition.getGuard(), methodDeclaration.parameters(), getArgumentParameterMap(transition.getUpdate())) + "){\n");
-					if(sts.getEdgeTarget(transition)==0){
-						fileWriter.write("\tMonitorHelper.removeMonitorInstanceId(monitorInstanceId);\n");
-					}else {
-						fileWriter.write("\tcurrentLocation = " + sts.getEdgeTarget(transition) + ";\n");
-					}
-					fileWriter.write("}else ");
-				}
-			}
-			if(check){
-				fileWriter.write("{ throw new Exception(\"Safty Violation\");}\n");
-			}
-			fileWriter.write("MonitorHelper.setCurrentLocation(monitorInstanceId, currentLocation);\n");
-			fileWriter.write("if(violation){\n");
-			fileWriter.write("\tres = MonitorHelper.applyCountermeasure(\"" + controllableMethodName + "\", target, thisJoinPoint.getArgs());\n");
-			fileWriter.write("\tif(((Integer)res[0])==0){\n");
-			String args = "";
-			parts = parameters.replaceAll("  ", " ").split(" ");
-			int c = 2;
-			for (int i = 0; i < parts.length; i+=2) {
-				args += "(" + parts[i] + ")res[" + c++ + "], ";
-			}
-			fileWriter.write("\treturn proceed(" + args + " target);\n");
-			fileWriter.write("\t} else {\n");
-			fileWriter.write("\tMonitorHelper.removeMonitorInstanceId(monitorInstanceId);\n");
-			fileWriter.write("\tthrow new Exception(\"Security Violation\");\n\t}\n");
-			fileWriter.write("}\n");
-			fileWriter.write("}\n");
-			fileWriter.write("}");
-			fileWriter.close();
-		}
-	}
-	
-	private Map<String, String> getArgumentParameterMap(String upadater) {
-		HashMap<String, String> res = new HashMap<>();
-		if(!upadater.replaceAll("\\s", "").equals("")){
-			String[] parts = upadater.split(";");
-			for (String part : parts) {
-				String leftHandSide = part.replaceAll("\\s", "").split("=")[0];
-				String rightHandSide = part.replaceAll("\\s", "").split("=")[1];
-				if(!leftHandSide.matches("L(XC|IC|XI|II)_")){
-					res.put(rightHandSide, leftHandSide);
-				}
-			}
-		}
-		return res;
-	}
-
-	private String convertToJavaSyntax(String guard, List<SingleVariableDeclaration> parameters, Map<String, String> argumentParameterMap) {
-		guard = guard.replaceAll("=", " == ");
-		guard = guard.replaceAll("<>", " != ");
-		guard = guard.replaceAll(" and ", " && ");
-		guard = guard.replaceAll(" or ", " || " );
-		guard = guard.replaceAll(" not ", " ! ");
-		String[] guardParts = guard.replaceAll("\\W\\d+\\W|(\\s*true\\s*)|(\\s*false\\s*)|\\s", "").split("\\W+");
-		sort(guardParts);		
-		for (String guardPart : guardParts) {
-			if(!guardPart/*.replaceAll(" ", "")*/.equals("")){
-				String[] parts = null;
-				if(argumentParameterMap.get(guardPart)!=null){
-					parts = argumentParameterMap.get(guardPart).split("_");
-				}else{
-					parts = guardPart.split("_");
-				}
-				boolean check = true;
-				for (int i = 0; i < parameters.size(); i++) {
-					if(parts[parts.length-1].replaceAll(" ", "").equals(parameters.get(i).getName().toString().replaceAll(" ", ""))){
-						check = false;
-					}
-				}
-				if(check /*&& !parts[parts.length-1].matches("(\\s*[+-]?\\d*.?\\d+\\s*)|(\\s*true\\s*)|(\\s*false\\s*)")*/){
-					guard = guard.replaceAll(guardPart, "target." + parts[parts.length-1]);
-				}else{
-					guard = guard.replaceAll(guardPart, parts[parts.length-1]);
-				}
-			}
-		}
-		return guard;
-	}
-	
-	private void sort(String[] guardParts) {
-		if(guardParts.length>1){
-			boolean sorted = false;
-			while (!sorted) {
-				for (int i = 0; i < guardParts.length-1; i++) {
-					sorted = true;
-					if(guardParts[i].length()<guardParts[i+1].length()){
-						String temp = guardParts[i];
-						guardParts[i] = guardParts[i+1];
-						guardParts[i+1] = temp;
-						sorted = false;
-					}
-				}
-			}
-		}
-	}
-
-	private MethodDeclaration getMethodDeclaration(Hashtable<String, TypeDeclaration> classes, String methodFullName) {
-		String className = methodFullName.substring(0, methodFullName.lastIndexOf("."));
-		String methodName = methodFullName.substring(methodFullName.lastIndexOf(".") + 1, methodFullName.length());
-		MethodDeclaration res = null;
-		for (MethodDeclaration methodDeclaration : classes.get(className).getMethods()) {
-			if(methodDeclaration.getName().toString().equals(methodName)){
-				res = methodDeclaration;
-				break;
-			}
-		}
-		return res;
-	}
-	
-	STSHelper synthesizeControlledSTS() throws Exception{
+	private void synthesizeControlledSTS() throws Exception{
 		Hashtable<String, String> securityGuards = reaxHelper.run();
 //		STSHelper stsHelper = (STSHelper) stsHelper.clone();
 		if(!securityGuards.isEmpty()){
@@ -378,10 +215,9 @@ public class SecurityMonitorSynthesizer {
 				}
 			}
 		}
-		return stsHelper;
 	}
 	
-	private STSHelper makeUnmonitorableFree(){
+	private void makeUnmonitorableFree(){
 //		STSHelper stsHelper = (STS) stsHelper.clone();
 		Transition unmonitorableTransition = nextUnmonitorable(stsHelper);
 		while(unmonitorableTransition!=null){
@@ -397,64 +233,20 @@ public class SecurityMonitorSynthesizer {
 			unmonitorableTransition = nextUnmonitorable(stsHelper);
 		}
 		clearUpdates(stsHelper);
-		removeSTARTTransitions(stsHelper);
-		return stsHelper;
 	}
 	
-	private void removeSTARTTransitions(STSHelper stsHelper) {
-		Set<Transition> transitions = new HashSet<>();
-		for (Transition transition : stsHelper.getTransitions()) {
-			if(transition.getAction().equals(STS.START)){
-				transitions.add(transition);
-			}
-		}
-		for (Transition transition : transitions) {
-			Integer target = transition.getTarget();
-			Set<Transition> outgoingTransitions = new HashSet<>();
-			outgoingTransitions.addAll(stsHelper.getOutgoingTransitions(target));
-			for (Transition outgoingTransition : outgoingTransitions) {
-				stsHelper.removeTransition(outgoingTransition);
-				stsHelper.addTransition(0, outgoingTransition.getTarget(), outgoingTransition.getAction(), outgoingTransition.getGuard(), outgoingTransition.getUpdate());
-			}
-			Set<Transition> incomingTransitions = new HashSet<>();
-			incomingTransitions.addAll(stsHelper.getIncomingTransitions(target));
-			for (Transition incomingTransition : incomingTransitions) {
-				stsHelper.removeTransition(incomingTransition);
-				stsHelper.addTransition(incomingTransition.getSource(), 0, incomingTransition.getAction(), incomingTransition.getGuard(), incomingTransition.getUpdate());
-			}
-			stsHelper.removeTransition(transition);
-			stsHelper.removeLocation(target);
-		}
-	}
-
 	private void clearUpdates(STSHelper stsHelper) {
 		Set<Transition> transitions = new HashSet<>();
 		transitions.addAll(stsHelper.getTransitions());
 		for (Transition transition : transitions) {
-			String update = "";
-			Integer source = transition.getSource();
-			Integer target = transition.getTarget();
-			if(transition.getAction().equals(STS.PARAMETER)){
-				if(!transition.getUpdate().matches("\\s*")){
-					update = transition.getUpdate().replaceAll("L(XC|IC|XI|II)_", "@@");
-					update = update.substring(0, update.indexOf("@@"));
-				}				
-				Set<Transition> outgoingTransitions = new HashSet<>();
-				outgoingTransitions.addAll(stsHelper.getOutgoingTransitions(target));
-				for (Transition transition2 : outgoingTransitions) {
-					transition2.setUpdate(update);
-					stsHelper.removeTransition(transition2);
-					stsHelper.addTransition(source, transition2.getTarget(), transition2.getAction(), transition2.getGuard(), transition2.getUpdate());
+			String newUpdate = "";
+			String[] parts = transition.getUpdate().split(";");
+			for (String part : parts) {
+				if(part.matches("\\s*L[IX][^=]+\\=.+")){
+					newUpdate += part + ";";
 				}
-				if(stsHelper.getOutDegree(target)==0){
-					stsHelper.removeLocation(target);
-				}
-				stsHelper.removeTransition(transition);
-			}else if(transition.getAction().equals(STS.RETURN)){
-				stsHelper.removeAllTransitions(source, target);
-				stsHelper.addTransition(source, target, ((Transition)(stsHelper.getIncomingTransitions(source).toArray()[0])).getAction(), 
-						"true", "");
 			}
+			transition.setUpdate(newUpdate);
 		}
 	}
 
@@ -548,17 +340,12 @@ public class SecurityMonitorSynthesizer {
 		return guard;
 	}
 	
-	public void generateAspect() throws IOException{
-		stsHelper.generateAspect(sourcePath, targetPath);
-	}
-
 	public void synthesize() throws Exception{
 		propagateInitialValues();
 		stsHelper.saveAsDot(targetPath + File.separator + "initValuesPropagatedSts.dot");
-		STSHelper controlledSTSHelper = synthesizeControlledSTS();
-		controlledSTSHelper.saveAsDot(targetPath + File.separator +"controlledSts.dot");
-		controlledSTSHelper = makeUnmonitorableFree();
-		controlledSTSHelper.saveAsDot("/home/mohsen/git/runningexample/aspects/freemodelc.dot");
-		controlledSTSHelper.generateAspect(sourcePath, "/home/mohsen/git/runningexample/aspects");
+		synthesizeControlledSTS();
+		stsHelper.saveAsDot(targetPath + File.separator +"controlledSts.dot");
+		makeUnmonitorableFree();
+		stsHelper.saveAsDot(targetPath + File.separator + "unmonitorableFreeSts.dot");
 	}
 }

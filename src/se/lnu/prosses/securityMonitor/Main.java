@@ -18,9 +18,13 @@ public class Main {
 		entryPoints.add(".*\\.main");
 		controllableMethodNames.add("se.lnu.CaseStudy.estimatLocation");
 
-		JavaProjectSTSExtractor stsExtractor = new JavaProjectSTSExtractor(sourcePath, classPath, includingFilter, excludingFilter, targetPath);
+		JavaProjectHelper javaProjectHelper = new JavaProjectHelper(sourcePath, classPath);
+		javaProjectHelper.load();
+		JavaProjectSTSExtractor stsExtractor = new JavaProjectSTSExtractor(javaProjectHelper, includingFilter, excludingFilter, targetPath);
 		STSHelper stsHelper = stsExtractor.extract();
 		SecurityMonitorSynthesizer securityMonitorSynthesizer = new SecurityMonitorSynthesizer(stsHelper, targetPath);
 		securityMonitorSynthesizer.synthesize();
+		AspectJGenerator aspectJGenerator = new AspectJGenerator(stsHelper, javaProjectHelper, targetPath);
+		aspectJGenerator.generate();
 	}
 }

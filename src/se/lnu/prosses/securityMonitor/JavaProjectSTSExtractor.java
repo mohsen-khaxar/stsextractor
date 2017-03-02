@@ -13,13 +13,10 @@ import org.eclipse.jdt.core.dom.SimpleName;
 
 public class JavaProjectSTSExtractor {
 	JavaProjectHelper javaProjectHelper;
-	ReaxHelper reaxHelper;
 	Stack<String> returnTarget;
 	Stack<Hashtable<SimpleName, String>> renamingRuleSets;
-	String sourcePath;
 	String targetPath;
-	String[] classPath;
-	int newLocation = 2;
+	int newLocation = 1;
 	int pcLevel = 0;
 	int maxPcLevel = 0;
 	Hashtable<Integer, Integer> blocks;
@@ -28,21 +25,16 @@ public class JavaProjectSTSExtractor {
 	public ArrayList<String> entryPoints;
 	public STSHelper stsHelper;
 	public int scopeId = 0;
-	public JavaProjectSTSExtractor(String sourcePath, String[] classPath, ArrayList<String> includingFilter, ArrayList<String> excludingFilter, String targetPath) {
+	public JavaProjectSTSExtractor(JavaProjectHelper javaProjectHelper, ArrayList<String> includingFilter, ArrayList<String> excludingFilter, String targetPath) {
 		blocks = new Hashtable<>();
-		this.sourcePath = sourcePath;
-		this.classPath = classPath;
+		this.javaProjectHelper = javaProjectHelper;
 		this.targetPath = targetPath;
 		this.includingFilter = includingFilter;
 		this.excludingFilter = excludingFilter;
-		reaxHelper = new ReaxHelper(stsHelper);
-		stsHelper.addTransition(0, 1, STS.START, "true", "");
-		stsHelper.addTransition(2, 2, STS.TAU, "true", "");
+		stsHelper.addTransition(0, 0, STS.TAU, "true", "");
 	}
 	
 	public STSHelper extract() throws Exception{
-		javaProjectHelper = new JavaProjectHelper(sourcePath, classPath);
-		javaProjectHelper.load();
 		for (JavaFileHelper javaFileHelper : javaProjectHelper.getAllJavaFileHelpers()) {
 			JavaClassSTSExtractor javaClassSTSExtractor = new JavaClassSTSExtractor(javaFileHelper, this);
 			javaClassSTSExtractor.extract();
@@ -88,9 +80,11 @@ public class JavaProjectSTSExtractor {
 	}
 	
 	public String getUniqueName(SimpleName simpleName){
-    	return "";
+		String uniqueName = "";
+//		TODO populate uniqueNameJavaNameMap here.
+    	return uniqueName;
     }
-    
+	
     public int enterScope(){
     	int oldScopeId = this.scopeId;
     	this.scopeId++;

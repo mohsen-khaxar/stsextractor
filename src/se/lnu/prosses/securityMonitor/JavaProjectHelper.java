@@ -75,4 +75,8 @@ public class JavaProjectHelper {
 		JavaFileHelper javaFileHelper = javaFileHelpers.get(declaringClass);
 		return (TypeDeclaration)javaFileHelper.getCompilationUnit().types().get(0);
 	}
+
+	public JavaFileHelper getJavaFileHelper(String declaringClassName) {
+		return javaFileHelpers.get(declaringClassName);
+	}
 }
