@@ -7,6 +7,7 @@ public class Transition extends DefaultEdge {
 	String action;
 	String guard;
 	String update;
+	String extraData;
 	
 	public Transition(){
 		
@@ -16,6 +17,13 @@ public class Transition extends DefaultEdge {
 		this.action = action;
 		this.guard = guard;
 		this.update = update;
+	}
+
+	public Transition(String action, String guard, String update, String extraData) {
+		this.action = action;
+		this.guard = guard;
+		this.update = update;
+		this.extraData = extraData;
 	}
 
 	public String getAction() {
@@ -40,6 +48,14 @@ public class Transition extends DefaultEdge {
 
 	public void setUpdate(String update) {
 		this.update = update;
+	}
+	
+	public String getExtraData() {
+		return extraData;
+	}
+
+	public void setExtraData(String extraData) {
+		this.extraData = extraData;
 	}
 	
 	public Integer getSource() {

@@ -6,13 +6,12 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.Hashtable;
 import java.util.List;
-import java.util.Set;
-
 import org.jgrapht.ext.DOTExporter;
 
-public class STSHelper {
+public class STSHelper implements Cloneable{
 	public HashSet<String> actions;
 	public HashSet<String> controllableActions;
+	public HashSet<String> monitorableActions;
 	HashSet<String> variables;
 	public ArrayList<Object[]> securityPolicies;
 	public ArrayList<String> securityInits;
@@ -22,12 +21,21 @@ public class STSHelper {
 		this.sts = sts;
 		this.variables = new HashSet<>();
 		controllableActions = new HashSet<>();
-		controllableActions.add(STS.START);
-		controllableActions.add(STS.RETURN);
-		controllableActions.add(STS.PARAMETER);
+		monitorableActions = new HashSet<>();
+		monitorableActions.add(STS.START);
+		monitorableActions.add(STS.RETURN);
+		monitorableActions.add(STS.PARAMETER);
+		monitorableActions.add(addAction("se.lnu.DummyMethods.monitorablePoint"));
 		actionMethodMap = new Hashtable<>();
 		this.securityPolicies = new ArrayList<>();
 		this.securityInits = new ArrayList<>();
+	}
+	
+	@Override
+	protected Object clone() throws CloneNotSupportedException {
+		STSHelper stsHelper = (STSHelper) super.clone();
+		stsHelper.sts = (STS) this.sts.clone();
+		return stsHelper;
 	}
 	
 	public void saveAsDot(String path) throws Exception{
@@ -60,18 +68,25 @@ public class STSHelper {
 		
 	}
 	
+	public void addTransition(Integer source, Integer target, String action, String guard, String update, String extraData) {
+		addTransition(source, target, new Transition(action, guard, update, extraData));
+	}
+	
 	public void addTransition(Integer source, Integer target, String action, String guard, String update) {
+		addTransition(source, target, new Transition(action, guard, update));
+	}
+	
+	private void addTransition(Integer source, Integer target, Transition transition) {
 		if(!sts.vertexSet().contains(source)){
 			sts.addVertex(source);
 		}
 		if(!sts.vertexSet().contains(target)){
 			sts.addVertex(target);
 		}
-		Transition transition = new Transition(action, guard, update);
 		sts.addEdge(source, source, transition);
-		actions.add(action);
-		variables.addAll(getVariables(guard));
-		variables.addAll(getVariables(update));
+		actions.add(transition.getAction());
+		variables.addAll(getVariables(transition.getGuard()));
+		variables.addAll(getVariables(transition.getUpdate()));
 	}
 
 	private List<String> getVariables(String code) {
@@ -126,5 +141,21 @@ public class STSHelper {
 		ArrayList<Transition> incomingTransitions = new ArrayList<>();
 		incomingTransitions.addAll(sts.incomingEdgesOf(location));
 		return incomingTransitions;
+	}
+
+	public void removeTransition(Transition transition) {
+		sts.removeEdge(transition);		
+	}
+
+	public void removeLocation(Integer location) {
+		sts.removeVertex(location);		
+	}
+
+	public int getOutDegree(Integer location) {
+		return sts.outDegreeOf(location);
+	}
+
+	public void removeAllTransitions(Integer source, Integer target) {
+		sts.removeAllEdges(source, target);
 	}
 }

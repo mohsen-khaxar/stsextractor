@@ -12,6 +12,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Queue;
 import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import org.eclipse.jdt.core.dom.MethodDeclaration;
 import org.eclipse.jdt.core.dom.SingleVariableDeclaration;
@@ -28,7 +30,12 @@ public class SecurityMonitorSynthesizer {
 		this.reaxHelper = new ReaxHelper(stsHelper, targetPath);
 	}
 	
-	public void propagateInitialValues(){
+	private void propagateInitialValues(){
+		propagateInitialValues(true);
+		propagateInitialValues(false);
+	}
+	
+	private void propagateInitialValues(boolean first){
 		Queue<Integer> queue = new LinkedList<>();
 		for (Transition transition : stsHelper.getOutgoingTransitions(0)) {
 			queue.add(transition.getTarget());
@@ -36,20 +43,35 @@ public class SecurityMonitorSynthesizer {
 		ArrayList<Integer> visited = new ArrayList<>();
 		while(!queue.isEmpty()){
 			Integer location = queue.poll();
-			Hashtable<String, String> initialValues = getInitialValues(stsHelper.getIncomingTransitions(location));
+			Hashtable<String, String> initialValues = getIncomingInitialValues(location);
 			for (Transition transition : stsHelper.getOutgoingTransitions(location)) {
 				String update = transition.getUpdate().replaceAll("==", "#").replaceAll("!=", "<>");
 				String newUpdate = update.replaceAll("\\s*=", "=");
 				for (String variable : initialValues.keySet()) {
 					if(!newUpdate.contains(variable+"=")){
-						newUpdate = variable + "=" + initialValues.get(variable) + ";" + newUpdate;  
+						String initialValue = initialValues.get(variable);
+						if(!first && initialValue.contains("{")){
+							initialValue = initialValue.substring(initialValue.indexOf("{"), initialValue.indexOf("}")).split(",")[1];
+						}
+						newUpdate = variable + "=" + initialValue + ";" + newUpdate;  
 					}
+				}
+				if(!first){
+					String regex = "\\{[\\w_$]+\\,\\s*(true|false|[-+]?\\d*\\.?\\d+)\\s*\\}";
+					Pattern pattern = Pattern.compile(regex);
+			        Matcher matcher = pattern.matcher(newUpdate);
+			        StringBuffer stringBuffer = new StringBuffer();
+			        while (matcher.find()) {
+			        	String variable = matcher.group();
+			        	variable = variable.substring(variable.indexOf("{"), variable.indexOf("}")).split(",")[0];
+			        	matcher.appendReplacement(stringBuffer, variable);
+			        }
+			        matcher.appendTail(stringBuffer);
+			        newUpdate = stringBuffer.toString();
 				}
 				newUpdate = propagateInitialValuesAcrossUpdate(newUpdate);
 				transition.setUpdate(newUpdate.replaceAll("#", "==").replaceAll("<>", "!="));
-				if(transition.getTarget()!=0 
-						&& (!visited.contains(transition.getTarget()) 
-								|| !newUpdate.replaceAll("\\s", "").equals(update.replaceAll("\\s", "")))){
+				if(!visited.contains(transition.getTarget()) /*|| !newUpdate.replaceAll("\\s", "").equals(update.replaceAll("\\s", ""))*/){
 					queue.add(transition.getTarget());
 				}
 			}
@@ -62,14 +84,16 @@ public class SecurityMonitorSynthesizer {
 			String[] parts = update.split(";");
 			for (int i=0; i<parts.length; i++) {
 				if(!parts[i].matches("\\s*")){
-					String left = parts[i].split("=")[0].replaceAll("\\s", "");
-					String right = parts[i].split("=")[1];
-					if(right.matches("\\s*(true|false|[-+]?\\d*\\.?\\d+)\\s*")){
+					String leftHandSide = parts[i].split("=")[0].replaceAll("\\s", "");
+					String rightHandSide = parts[i].split("=")[1];
+					String regex = "\\s*(true|false|[-+]?\\d*\\.?\\d+)\\s*";
+					regex = "(" + regex + ")|(\\{[\\w_$]+\\," + regex + "\\})";
+					if(rightHandSide.matches(regex)){
 						for (int j = i+1; j < parts.length; j++) {
-							String left2 = parts[j].split("=")[0].replaceAll("\\s", "");
-							String right2 = parts[j].split("=")[1];
-							if(!left.equals(left2)||(" "+right2+" ").matches(".*\\W"+left+"\\W.*")){
-								parts[j] = parts[j].split("=")[0] + "=" + replace(parts[j].split("=")[1], left, right);
+							String leftHandSide2 = parts[j].split("=")[0].replaceAll("\\s", "");
+							String rightHandSide2 = parts[j].split("=")[1];
+							if(!leftHandSide.equals(leftHandSide2)||(" "+rightHandSide2+" ").matches(".*\\W"+leftHandSide+"\\W.*")){
+								parts[j] = parts[j].split("=")[0] + "=" + replace(parts[j].split("=")[1], leftHandSide, rightHandSide);
 							}else{
 								parts[i] = "";
 								break;
@@ -89,46 +113,78 @@ public class SecurityMonitorSynthesizer {
 	}
 	
 	
-	private Hashtable<String, String> getInitialValues(List<Transition> transitions) {
-		Hashtable<String, String> res = new Hashtable<>();
+	private Hashtable<String, String> getIncomingInitialValues(Integer location) {
+		List<Transition> incomingTransitions = stsHelper.getIncomingTransitions(location);
+		Hashtable<String, String> incomingInitialValues = new Hashtable<>();
 		boolean first = true;
-		for (Transition transition : transitions) {
+		for (Transition transition : incomingTransitions) {
 			String[] parts = transition.getUpdate().split(";");
-			ArrayList<String> variables = new ArrayList<>();
+			ArrayList<String> leftHandSideVariables = new ArrayList<>();
 			for (String part : parts) {
 				part = part.replaceAll("\\s", "");
-				variables.add(part.split("=")[0]);
 				if(!part.equals("")){
-					if(part.split("=")[1].matches("\\s*(true|false|[-+]?\\d*\\.?\\d+)\\s*")){
-						if(res.get(part.split("=")[0])==null){
+					String leftHandSide = part.split("=")[0];
+					leftHandSideVariables.add(leftHandSide);
+					String rightHandSide = part.split("=")[1];
+					String regex = "\\s*(true|false|[-+]?\\d*\\.?\\d+)\\s*";
+					regex = "(" + regex + ")|(\\{[\\w_$]+\\," + regex + "\\})";
+					if(rightHandSide.matches(regex)){
+						if(incomingInitialValues.get(leftHandSide)==null){
 							if(first){
-								res.put(part.split("=")[0], part.split("=")[1]);
+								incomingInitialValues.put(leftHandSide, rightHandSide);
 							}else{
-								res.put(part.split("=")[0], "V");
+								incomingInitialValues.put(leftHandSide, "V");
 							}
-						}else if(!res.get(part.split("=")[0]).equals(part.split("=")[1])){
-							res.put(part.split("=")[0], "V");
+						}else {
+							String value1 = incomingInitialValues.get(leftHandSide);
+							if(value1.contains("{")){
+								value1 = value1.substring(value1.indexOf("{"), value1.indexOf("}")).split(",")[1];
+							}
+							String value2 = rightHandSide;
+							if(rightHandSide.contains("{")){
+								value2 = value2.substring(value2.indexOf("{"), value2.indexOf("}")).split(",")[1];
+							}
+							if(!value1.equals(value2)){	
+								incomingInitialValues.put(leftHandSide, "V");
+							}
 						}
 					}else{
-						res.put(part.split("=")[0], "V");
+						incomingInitialValues.put(leftHandSide, "V");
 					}
 				}
 			}
-			for (String variable : res.keySet()) {
-				if(!variables.contains(variable)){
-					res.put(variable, "V");
-				}
-			}
+//			for (String variable : incomingInitialValues.keySet()) {
+//				if(!leftHandSideVariables.contains(variable)){
+//					incomingInitialValues.put(variable, "V");
+//				}
+//			}
 			first = false;
 		}
 		ArrayList<String> keys = new ArrayList<>();
-		keys.addAll(res.keySet());
+		keys.addAll(incomingInitialValues.keySet());
 		for (String key : keys) {
-			if(res.get(key).equals("V")){
-				res.remove(key);
+			if(incomingInitialValues.get(key).equals("V")){
+				incomingInitialValues.remove(key);
 			}
 		}
-		return res;
+		return incomingInitialValues;
+	}
+	
+	private String replace(String string, String find, String replace) {
+		String regex = "\\W" + find + "\\W";
+		Pattern pattern = Pattern.compile(regex);
+		string = " " + string.replaceAll("\\{\\s*", "") + " ";
+        Matcher matcher = pattern.matcher(string);
+        StringBuffer stringBuffer = new StringBuffer();
+        while (matcher.find()) {
+        	String temp = matcher.group();
+        	if(!temp.startsWith("{")){
+        		temp = temp.charAt(0) + replace + temp.charAt(temp.length()-1);
+        	}
+        	matcher.appendReplacement(stringBuffer, temp);
+        }
+        matcher.appendTail(stringBuffer);
+        return stringBuffer.toString();
 	}
 	
 	@SuppressWarnings("unchecked")
@@ -294,185 +350,130 @@ public class SecurityMonitorSynthesizer {
 		return res;
 	}
 	
-	private String replace(String string, String left, String right) {
-		String[] parts = ("@"+string+"@").split(left);
-		String res = "";
-		for (int i=0;i<parts.length-1;i++) {
-			if(!Character.isJavaIdentifierPart(parts[i].charAt(parts[i].length()-1))
-					&& !Character.isJavaIdentifierPart(parts[i+1].charAt(0))){
-				res += parts[i] + right;
-			}else{
-				res += parts[i] + left;
-			}
-		}
-		res += parts[parts.length-1];
-		res = res.replaceAll("@", "");
-		return res;
-	}
-	
-	public STS generateControlledSTS(){
+	STSHelper synthesizeControlledSTS() throws Exception{
 		Hashtable<String, String> securityGuards = reaxHelper.run();
-		return makeControlled(securityGuards);
-	}
-	STSHelper makeControlled(Hashtable<String, String> securityGuards){
-		STS res = (STS) sts.clone();
+//		STSHelper stsHelper = (STSHelper) stsHelper.clone();
 		if(!securityGuards.isEmpty()){
 			Set<Transition> transitions = new HashSet<>();
-			transitions.addAll(res.edgeSet());
+			transitions.addAll(stsHelper.getTransitions());
 			for (Transition transition : transitions) {
-				if(res.controllableEvents.contains(transition.getAction()) && !transition.getAction().equals(STS.START)
-						&& !transition.getAction().equals(STS.RETURN) && !transition.getAction().equals(STS.PARAMETER)){
+				if(stsHelper.controllableActions.contains(transition.getAction())){
 					String guard = "";
 					String separator = "";
 					if(securityGuards.get(transition.getAction().replaceAll("\\s", "")+",-1")!=null){
 						guard = securityGuards.get(transition.getAction().replaceAll("\\s", "")+",-1");
 						separator = " or ";
 					}
-					if(securityGuards.get(transition.getAction().replaceAll("\\s", "")+","+res.getEdgeSource(transition))!=null){
-						guard += separator + securityGuards.get(transition.getAction().replaceAll("\\s", "")+","+res.getEdgeSource(transition));
+					if(securityGuards.get(transition.getAction().replaceAll("\\s", "")+","+transition.getSource())!=null){
+						guard += separator + securityGuards.get(transition.getAction().replaceAll("\\s", "")+","+transition.getSource());
 					}
 					if(guard.equals("")){
 						guard = "false";
 					}
 					if(!guard.matches("(true|\\sand\\s|\\sor\\s|\\s)*")){
+						guard = guard.replaceAll("\\s+", " ");
 						transition.setGuard(guard);
-						Transition insecureTransition = new Transition(transition.getAction(), " not (" + guard.replaceAll("\\s+", " ") + ")", transition.update);
-						if(!res.vertexSet().contains(-res.getEdgeTarget(transition))){
-							res.addVertex(-res.getEdgeTarget(transition));
-						}
-						res.addEdge(res.getEdgeSource(transition), -res.getEdgeTarget(transition), insecureTransition);
-						Transition returnTransition = new Transition(Transition.RETURN, "true", "");
-						res.addEdge(-res.getEdgeTarget(transition), res.getEdgeTarget(transition), returnTransition);
-						
-						((Transition)(res.incomingEdgesOf(res.getEdgeSource(transition)).toArray()[0])).setAction(Transition.PARAMETER);
+						stsHelper.addTransition(transition.getSource(), transition.getTarget(), transition.getAction(), " not (" + guard + ")", "", STS.INSECURE);
 					}
 				}
 			}
 		}
-		return res;
+		return stsHelper;
 	}
 	
-	public STS convertToUncontrollableFreeSTS(){
-		STS sts = (STS) sts.clone();
-		Transition transition = nextUncontrollable(sts);
-		while(transition!=null){
-//			System.out.println(sts.getEdgeSource(transition) + ", " + sts.getEdgeTarget(transition));
-//			try {
-//				STS sts2 = (STS) sts.clone();
-//				for (Transition transition2 : sts2.edgeSet()) {
-//					transition2.setUpadater("");
-//					transition2.setGuard("(true)");;
-//				}
-//				sts2.saveAsDot("/home/mohsen/git/runningexample/aspects/m.dot");
-//			} catch (Exception e) {
-//				// TODO Auto-generated catch block
-//				e.printStackTrace();
-//			}
+	private STSHelper makeUnmonitorableFree(){
+//		STSHelper stsHelper = (STS) stsHelper.clone();
+		Transition unmonitorableTransition = nextUnmonitorable(stsHelper);
+		while(unmonitorableTransition!=null){
 			Set<Transition> incomingTransitions = new HashSet<>();
-			incomingTransitions.addAll(sts.incomingEdgesOf(sts.getEdgeSource(transition)));
+			incomingTransitions.addAll(stsHelper.getIncomingTransitions(unmonitorableTransition.getSource()));
 			for (Transition incomingTransition : incomingTransitions) {
-				mergeTransitions(sts, incomingTransition, transition);
+				mergeTransitions(stsHelper, incomingTransition, unmonitorableTransition);
 			}
-			sts.removeEdge(transition);
-			if(sts.outgoingEdgesOf(sts.getEdgeSource(transition)).size()==0){
-				sts.removeVertex(sts.getEdgeSource(transition));
+			stsHelper.removeTransition(unmonitorableTransition);
+			if(stsHelper.getOutgoingTransitions(unmonitorableTransition.getSource()).size()==0){
+				stsHelper.removeLocation(unmonitorableTransition.getSource());
 			}
-			transition = nextUncontrollable(sts);
-//			try {
-//				STS sts2 = (STS) sts.clone();
-//				for (Transition transition2 : sts2.edgeSet()) {
-//					transition2.setUpadater("");
-//					transition2.setGuard("(true)");;
-//				}
-//				sts2.saveAsDot("/home/mohsen/git/runningexample/aspects/m.dot");
-//			} catch (Exception e) {
-//				// TODO Auto-generated catch block
-//				e.printStackTrace();
-//			}
+			unmonitorableTransition = nextUnmonitorable(stsHelper);
 		}
-		clearUpdaters(sts);
-		removeSTARTTransitions(sts);
-		return sts;
+		clearUpdates(stsHelper);
+		removeSTARTTransitions(stsHelper);
+		return stsHelper;
 	}
 	
-	private void removeSTARTTransitions(STS sts) {
+	private void removeSTARTTransitions(STSHelper stsHelper) {
 		Set<Transition> transitions = new HashSet<>();
-		for (Transition transition : sts.edgeSet()) {
+		for (Transition transition : stsHelper.getTransitions()) {
 			if(transition.getAction().equals(STS.START)){
 				transitions.add(transition);
 			}
 		}
 		for (Transition transition : transitions) {
-			Integer target = sts.getEdgeTarget(transition);
+			Integer target = transition.getTarget();
 			Set<Transition> outgoingTransitions = new HashSet<>();
-			outgoingTransitions.addAll(sts.outgoingEdgesOf(target));
+			outgoingTransitions.addAll(stsHelper.getOutgoingTransitions(target));
 			for (Transition outgoingTransition : outgoingTransitions) {
-				sts.removeEdge(outgoingTransition);
-				sts.addEdge(0, sts.getEdgeTarget(outgoingTransition), outgoingTransition);
+				stsHelper.removeTransition(outgoingTransition);
+				stsHelper.addTransition(0, outgoingTransition.getTarget(), outgoingTransition.getAction(), outgoingTransition.getGuard(), outgoingTransition.getUpdate());
 			}
 			Set<Transition> incomingTransitions = new HashSet<>();
-			incomingTransitions.addAll(sts.incomingEdgesOf(target));
+			incomingTransitions.addAll(stsHelper.getIncomingTransitions(target));
 			for (Transition incomingTransition : incomingTransitions) {
-				sts.removeEdge(incomingTransition);
-				sts.addEdge(sts.getEdgeSource(incomingTransition), 0, incomingTransition);
+				stsHelper.removeTransition(incomingTransition);
+				stsHelper.addTransition(incomingTransition.getSource(), 0, incomingTransition.getAction(), incomingTransition.getGuard(), incomingTransition.getUpdate());
 			}
-			sts.removeEdge(transition);
-			sts.removeVertex(target);
+			stsHelper.removeTransition(transition);
+			stsHelper.removeLocation(target);
 		}
 	}
 
-	private void clearUpdaters(STS sts) {
+	private void clearUpdates(STSHelper stsHelper) {
 		Set<Transition> transitions = new HashSet<>();
-		transitions.addAll(sts.edgeSet());
+		transitions.addAll(stsHelper.getTransitions());
 		for (Transition transition : transitions) {
-			String updater = "";
-			Integer source = sts.getEdgeSource(transition);
-			Integer target = sts.getEdgeTarget(transition);
+			String update = "";
+			Integer source = transition.getSource();
+			Integer target = transition.getTarget();
 			if(transition.getAction().equals(STS.PARAMETER)){
 				if(!transition.getUpdate().matches("\\s*")){
-					updater = transition.getUpdate().replaceAll("L(XC|IC|XI|II)_", "@@");
-					updater = updater.substring(0, updater.indexOf("@@"));
+					update = transition.getUpdate().replaceAll("L(XC|IC|XI|II)_", "@@");
+					update = update.substring(0, update.indexOf("@@"));
 				}				
 				Set<Transition> outgoingTransitions = new HashSet<>();
-				outgoingTransitions.addAll(sts.outgoingEdgesOf(target));
+				outgoingTransitions.addAll(stsHelper.getOutgoingTransitions(target));
 				for (Transition transition2 : outgoingTransitions) {
-					transition2.setUpdate(updater);
-					sts.removeEdge(transition2);
-					sts.addEdge(source, sts.getEdgeTarget(transition2), transition2);
+					transition2.setUpdate(update);
+					stsHelper.removeTransition(transition2);
+					stsHelper.addTransition(source, transition2.getTarget(), transition2.getAction(), transition2.getGuard(), transition2.getUpdate());
 				}
-				if(sts.outDegreeOf(target)==0){
-					sts.removeVertex(target);
+				if(stsHelper.getOutDegree(target)==0){
+					stsHelper.removeLocation(target);
 				}
-				sts.removeEdge(transition);
+				stsHelper.removeTransition(transition);
 			}else if(transition.getAction().equals(STS.RETURN)){
-				sts.removeAllEdges(source, target);
-				transition.setUpdate("");
-				transition.setAction(((Transition)(sts.incomingEdgesOf(source).toArray()[0])).getAction());
-				transition.setGuard("true");
-				sts.addEdge(source, target, transition);
+				stsHelper.removeAllTransitions(source, target);
+				stsHelper.addTransition(source, target, ((Transition)(stsHelper.getIncomingTransitions(source).toArray()[0])).getAction(), 
+						"true", "");
 			}
 		}
 	}
 
-	private void mergeTransitions(STS sts, Transition incomingTransition, Transition outgoingTransition) {
-		if(controllableEvents.contains(incomingTransition.getAction()) || 
-				incomingTransition.getAction().equals("se_lnu_CaseStudy_dummy1") || 
-				incomingTransition.getAction().equals("se_lnu_CaseStudy_dummy2") || 
-				sts.getEdgeSource(incomingTransition)!=sts.getEdgeTarget(outgoingTransition)){
-			String guard1 = convertToSTSSyntax(incomingTransition.getGuard()).replaceAll("\\s+", " ");
+	private void mergeTransitions(STSHelper stsHelper, Transition incomingTransition, Transition outgoingTransition) {
+		if(stsHelper.monitorableActions.contains(incomingTransition.getAction()) || 
+				incomingTransition.getSource()!=outgoingTransition.getTarget()){
+			String guard1 = STSHelper.convertToSTSSyntax(incomingTransition.getGuard()).replaceAll("\\s+", " ");
 			if(needParenthesis(guard1)){
 				guard1 = "(" + guard1 + ")";
 			}
-			String guard2 = getWeakestPrecondition(convertToSTSSyntax(outgoingTransition.getGuard())
-					, getControllableTransitionUpdater(incomingTransition)).replaceAll("\\s+", " ");
+			String guard2 = getWeakestPrecondition(STSHelper.convertToSTSSyntax(outgoingTransition.getGuard())
+					, incomingTransition.getUpdate()).replaceAll("\\s+", " ");
 			if(!guard2.matches(" true | false ") && guard2.contains(" or ")){
 				guard2 = "(" + guard2 + ")";
 			}
 			String guard = guard1 + " and " + guard2;
 			guard = guard.replaceAll("\\s?true\\s?and\\s?", " ").replaceAll("\\s?and\\s?true\\s?", " ").replaceAll("\\s+", " ");
-			String updater = incomingTransition.getUpdate() + outgoingTransition.getUpdate();
-			Transition newTransition = new Transition(incomingTransition.getAction(), guard, updater);
-			sts.addEdge(sts.getEdgeSource(incomingTransition), sts.getEdgeTarget(outgoingTransition), newTransition);
+			String update = incomingTransition.getUpdate() + outgoingTransition.getUpdate();
+			stsHelper.addTransition(incomingTransition.getSource(), outgoingTransition.getTarget(), incomingTransition.getAction(), guard, update);
 		}
 	}
 	
@@ -500,30 +501,15 @@ public class SecurityMonitorSynthesizer {
 		return res;
 	}
 
-	private String getControllableTransitionUpdater(Transition transition) {
-		String res = transition.getUpdate();
-//		if(controllableEvents.contains(transition.getEvent())){
-//			String[] parts = transition.getUpadater().split(";");
-//			for (String part : parts) {
-//				if(part.matches("\\s*L(XC|IC|XI|II)_.+")){
-//					res += part + ";";
-//				}
-//			}
-//		}else{
-//			res = transition.getUpadater();
-//		}
-		return res;
-	}
-
-	private Transition nextUncontrollable(STS sts) {
-		Transition res = null;
-		for (Transition transition : sts.edgeSet()) {
-			if(!transition.getAction().equals("se_lnu_CaseStudy_dummy1") && !transition.getAction().equals("se_lnu_CaseStudy_dummy2") && !controllableEvents.contains(transition.getAction())){
-				res = transition;
+	private Transition nextUnmonitorable(STSHelper stsHelper) {
+		Transition unmonitorableTransition = null;
+		for (Transition transition : stsHelper.getTransitions()) {
+			if(!stsHelper.monitorableActions.contains(transition.getAction())){
+				unmonitorableTransition = transition;
 				break;
 			}
 		}
-		return res;
+		return unmonitorableTransition;
 	}
 	
 	private String getWeakestPrecondition(String guard, String upadater) {
@@ -566,13 +552,13 @@ public class SecurityMonitorSynthesizer {
 		stsHelper.generateAspect(sourcePath, targetPath);
 	}
 
-	public void synthesize() {
+	public void synthesize() throws Exception{
 		propagateInitialValues();
-		stsHelper.saveAsDot(sourcePath + File.separator + "model.dot");
-		STS controlledSTS = stsExtractor.generateControlledSTS();
-		controlledSTS.saveAsDot("/home/mohsen/git/runningexample/aspects/modelc.dot");
-		controlledSTS = controlledSTS.convertToUncontrollableFreeSTS();
-		controlledSTS.saveAsDot("/home/mohsen/git/runningexample/aspects/freemodelc.dot");
-		controlledSTS.generateAspect(sourcePath, "/home/mohsen/git/runningexample/aspects");
+		stsHelper.saveAsDot(targetPath + File.separator + "initValuesPropagatedSts.dot");
+		STSHelper controlledSTSHelper = synthesizeControlledSTS();
+		controlledSTSHelper.saveAsDot(targetPath + File.separator +"controlledSts.dot");
+		controlledSTSHelper = makeUnmonitorableFree();
+		controlledSTSHelper.saveAsDot("/home/mohsen/git/runningexample/aspects/freemodelc.dot");
+		controlledSTSHelper.generateAspect(sourcePath, "/home/mohsen/git/runningexample/aspects");
 	}
 }

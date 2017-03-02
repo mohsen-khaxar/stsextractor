@@ -132,7 +132,9 @@ public class JavaClassSTSExtractor {
 		while(!(parentNode instanceof MethodDeclaration)){
 			parentNode = dummyMethodInvocation.getParent();
 		}
-		parent.stsHelper.setEntryPoint(javaFileHelper.getQualifiedName((MethodDeclaration)parentNode));
+		String qualifiedMethodName = javaFileHelper.getQualifiedName((MethodDeclaration)parentNode);
+		parent.stsHelper.setEntryPoint(qualifiedMethodName);
+		parent.stsHelper.setMonitorablePoint(qualifiedMethodName);
 	}
 
 	private void processCheckPoint(MethodInvocation dummyMethodInvocation) {
@@ -140,7 +142,9 @@ public class JavaClassSTSExtractor {
 		while(!(parentNode instanceof MethodDeclaration)){
 			parentNode = dummyMethodInvocation.getParent();
 		}
-		parent.stsHelper.setCheckPoint(javaFileHelper.getQualifiedName((MethodDeclaration)parentNode));
+		String qualifiedMethodName = javaFileHelper.getQualifiedName((MethodDeclaration)parentNode);
+		parent.stsHelper.setCheckPoint(qualifiedMethodName);
+		parent.stsHelper.setMonitorablePoint(qualifiedMethodName);
 	}
 
 	@SuppressWarnings("unchecked")
@@ -187,11 +191,8 @@ public class JavaClassSTSExtractor {
 		if((rightHandSide instanceof MethodInvocation 
 				|| rightHandSide instanceof ClassInstanceCreation) 
 				&& !isThirdParty(rightHandSide)){
-			String methodArgumentsUpdates = processMethodArguments(rightHandSide);
-			finalLocation = parent.newLocation();
-			parent.stsHelper.addTransition(initialLocation, finalLocation, javaFileHelper.getQualifiedName(rightHandSide), "true", methodArgumentsUpdates);
 			parent.returnTarget.push(parent.rename(leftHandSide));
-			finalLocation = processBlock(javaFileHelper.getMethodBody(rightHandSide), finalLocation);
+			finalLocation = processMethodInvocation(rightHandSide, initialLocation);
 		}else{
 			String rightHandExpression = parent.rename(rightHandSide);
 			String leftHandExpression = parent.rename(leftHandSide);
@@ -206,8 +207,16 @@ public class JavaClassSTSExtractor {
 	
 	private Integer processMethodInvocation(Expression expression, Integer initialLocation) throws Exception {
 		String methodArgumentsUpdates = processMethodArguments(expression);
+		Integer intermediateLocation = parent.newLocation();
+		parent.stsHelper.addTransition(initialLocation, intermediateLocation, STS.TAU, "true", methodArgumentsUpdates);
 		Integer finalLocation = parent.newLocation();
-		parent.stsHelper.addTransition(initialLocation, finalLocation, javaFileHelper.getQualifiedName(expression), "true", methodArgumentsUpdates);
+		String action = parent.stsHelper.addAction(javaFileHelper.getQualifiedName(expression));
+		String extraData = "";
+		Hashtable<SimpleName, String> renamingRuleSet = parent.renamingRuleSets.peek();
+		for (SimpleName parameter : renamingRuleSet.keySet()) {
+			extraData += parent.getUniqueName(parameter) + "=" + renamingRuleSet.get(parameter) + ";";
+		}
+		parent.stsHelper.addTransition(intermediateLocation, finalLocation, action, "true", "", extraData);
 		finalLocation = processBlock(javaFileHelper.getMethodBody(expression), finalLocation);
 		return finalLocation;
 	}
@@ -296,13 +305,13 @@ public class JavaClassSTSExtractor {
 		Hashtable<SimpleName, String> renamingRuleSet = getRenamingRuleSet(parameters, arguments);
 		String argumentAssignments = "";
 		for (int i=0; i< parameters.size(); i++) {
+			String parameterUniqueName = parent.getUniqueName(parameters.get(i));
+			String renamedArgument = parent.rename(arguments.get(i));
 			if(!renamingRuleSet.containsKey(parameters.get(i).toString())){
-				String parameterUniqueName = parent.getUniqueName(parameters.get(i));
-				String renamedArgument = parent.rename(arguments.get(i));
 				argumentAssignments += parameterUniqueName + "=" + renamedArgument + ";";
-				argumentAssignments += "LX_" + parameterUniqueName + "=" + getSecurityExpression(renamedArgument, "X") + ";";
-				argumentAssignments += "LI_" + parameterUniqueName + "=" + getSecurityExpression(renamedArgument, "I") + " or LPC;";
 			}
+			argumentAssignments += "LX_" + parameterUniqueName + "=" + getSecurityExpression(renamedArgument, "X") + ";";
+			argumentAssignments += "LI_" + parameterUniqueName + "=" + getSecurityExpression(renamedArgument, "I") + " or LPC;";
 		}
 		parent.renamingRuleSets.push(renamingRuleSet);
 		return argumentAssignments;

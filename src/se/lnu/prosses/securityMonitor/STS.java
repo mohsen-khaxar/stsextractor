@@ -8,8 +8,7 @@ import org.jgrapht.graph.AbstractBaseGraph;
 public class STS extends AbstractBaseGraph<Integer, Transition> implements DirectedGraph<Integer, Transition>{
 	static final public String TAU = "TAU";
 	public static final String START = "START";
-	public static final String RETURN = "RETURN";
-	public static final String PARAMETER = "PARAMETER";
+	public static final String INSECURE = "@INSECURE";
 	
 	static EdgeFactory<Integer, Transition> ef = new EdgeFactory<Integer, Transition>() {
 		@Override

@@ -48,7 +48,7 @@ public class ReaxHelper {
 		String[] parts = reaxResult.split(";");
 		for (String part : parts) {
 			if(!part.replaceAll("\\s", "").equals("")){
-				String event = part.substring(0, part.indexOf("=")).replaceAll("['\\s]", "");
+				String action = part.substring(0, part.indexOf("=")).replaceAll("['\\s]", "");
 				String[] orParts = part.substring(part.indexOf("=")+1, part.length()).split("\\sor\\s");
 				for (String orPart : orParts) {
 					String[] andParts = orPart.split("\\sand\\s");
@@ -62,12 +62,12 @@ public class ReaxHelper {
 					}
 					orPart = orPart.replaceAll("LOC = \\d+", "true").replaceAll("LOC in \\{(\\s*\\d+\\s*,?)+\\}", "true");
 					if(locations==null){
-						String value = securityGuards.get(event+",-1")==null ? orPart : securityGuards.get(event+",-1")+" or "+orPart;
-						securityGuards.put(event+",-1", value);
+						String value = securityGuards.get(action+",-1")==null ? orPart : securityGuards.get(action+",-1")+" or "+orPart;
+						securityGuards.put(action+",-1", value);
 					}else{
 						for (String location : locations) {
-							String value = securityGuards.get(event+","+location)==null ? orPart : securityGuards.get(event+","+location)+" or "+orPart;
-							securityGuards.put(event+","+location, value);
+							String value = securityGuards.get(action+","+location)==null ? orPart : securityGuards.get(action+","+location)+" or "+orPart;
+							securityGuards.put(action+","+location, value);
 						}
 					}
 				}
