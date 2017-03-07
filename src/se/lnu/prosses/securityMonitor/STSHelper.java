@@ -18,14 +18,15 @@ public class STSHelper implements Cloneable{
 	public ArrayList<String> securityInits;
 	Hashtable<String, String> actionMethodMap;
 	STS sts;
-	public STSHelper(STS sts) {
-		this.sts = sts;
+	public STSHelper() {
+		this.sts = new STS();
 		this.variables = new HashSet<>();
+		this.actions = new HashSet<>();
 		this.uniqueNameJavaNameMap = new Hashtable<>();
-		controllableActions = new HashSet<>();
-		monitorableActions = new HashSet<>();
-		monitorableActions.add(addAction("se.lnu.DummyMethods.monitorablePoint"));
-		actionMethodMap = new Hashtable<>();
+		this.actionMethodMap = new Hashtable<>();
+		this.controllableActions = new HashSet<>();
+		this.monitorableActions = new HashSet<>();
+		this.monitorableActions.add(addAction("se.lnu.DummyMethods.monitorablePoint"));
 		this.securityPolicies = new ArrayList<>();
 		this.securityInits = new ArrayList<>();
 	}
@@ -49,22 +50,20 @@ public class STSHelper implements Cloneable{
 	}
 	
 	public String addAction(String qualifiedMethodName){
-		String action = "";
+		String action = qualifiedMethodName.replaceAll("\\.", "_");
 		actionMethodMap.put(action, qualifiedMethodName);
 		return action;
 	}
 	
 	public void setCheckPoint(String qualifiedMethodName){
-	}
-	
-	public void setObservationPoint(String qualifiedMethodName){
+		String action = addAction(qualifiedMethodName);
+		controllableActions.add(action);
+		monitorableActions.add(action);
 	}
 	
 	public void setMonitorablePoint(String qualifiedMethodName){
-	}
-	
-	public void setEntryPoint(String qualifiedMethodName) {
-		
+		String action = addAction(qualifiedMethodName);
+		monitorableActions.add(action);
 	}
 	
 	public void addTransition(Integer source, Integer target, String action, String guard, String update, Object extraData) {
@@ -82,7 +81,7 @@ public class STSHelper implements Cloneable{
 		if(!sts.vertexSet().contains(target)){
 			sts.addVertex(target);
 		}
-		sts.addEdge(source, source, transition);
+		sts.addEdge(source, target, transition);
 		actions.add(transition.getAction());
 		variables.addAll(getVariables(transition.getGuard()));
 		variables.addAll(getVariables(transition.getUpdate()));
@@ -90,7 +89,7 @@ public class STSHelper implements Cloneable{
 
 	private List<String> getVariables(String code) {
 		ArrayList<String> variables = new ArrayList<>();
-		code = code.replaceAll("\\\"", "").replaceAll("\\W\\d*\\.d+\\W|(\\s*true\\s*)|(\\s*false\\s*)|\".*\"|\\s", "");
+		code = code.replaceAll("\\\"", "").replaceAll("[^\\w_$](or|and|not)[^\\w_$]", "&").replaceAll("\\W\\d*\\.d+\\W|(\\s*true\\s*)|(\\s*false\\s*)|\".*\"|\\s", "");
 		String[] parts = code.split("\\W+");
 		for (String part : parts) {
 			if(part.matches("[ibrL][\\w_$]+")){

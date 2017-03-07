@@ -1,6 +1,9 @@
 package se.lnu.prosses.securityMonitor;
 
 import java.io.File;
+import java.nio.file.Files;
+import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Hashtable;
@@ -24,6 +27,7 @@ public class JavaProjectHelper {
 	public void load() throws Exception{
 		ArrayList<String> javaFilePaths = getAllJavaFilePaths(sourcePath);
 		for (String javaFilePath : javaFilePaths) {
+			Files.copy(Paths.get(javaFilePath), Paths.get(javaFilePath + "_"), StandardCopyOption.REPLACE_EXISTING);
 			JavaFileHelper javaFileHelper = new JavaFileHelper(sourcePath, classPath, javaFilePath, this);
 			JavaClassNormalizer classNormalizer = new JavaClassNormalizer(javaFileHelper);
 			classNormalizer.normalize();

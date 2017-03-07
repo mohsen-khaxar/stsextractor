@@ -59,11 +59,11 @@ public class Transition extends DefaultEdge {
 	}
 	
 	public Integer getSource() {
-		return Integer.valueOf(this.getSource());
+		return (Integer) super.getSource();
 	}
 	
 	public Integer getTarget() {
-		return Integer.valueOf(this.getTarget());
+		return (Integer) super.getTarget();
 	}
 	
 	@Override

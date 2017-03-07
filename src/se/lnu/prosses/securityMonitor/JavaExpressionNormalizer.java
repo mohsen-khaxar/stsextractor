@@ -7,6 +7,7 @@ import java.util.Stack;
 import org.eclipse.jdt.core.dom.ASTNode;
 import org.eclipse.jdt.core.dom.Assignment;
 import org.eclipse.jdt.core.dom.Expression;
+import org.eclipse.jdt.core.dom.ExpressionStatement;
 import org.eclipse.jdt.core.dom.InfixExpression;
 import org.eclipse.jdt.core.dom.MethodInvocation;
 import org.eclipse.jdt.core.dom.NullLiteral;
@@ -19,26 +20,25 @@ import org.eclipse.jdt.core.dom.VariableDeclarationStatement;
 
 public class JavaExpressionNormalizer {
 	JavaFileHelper javaFileHelper;
-	int index;
 	private String auxVariablePrefix;
+	public int auxVariableIndex = 0;
 	
 	public JavaExpressionNormalizer(JavaFileHelper javaFileHelper, String auxVariablePrefix) {
 		this.javaFileHelper = javaFileHelper;
 		this.auxVariablePrefix = auxVariablePrefix;
 	}
 	
-	public List<ASTNode> normalize(Expression expression, int auxVariableIndex){
+	public List<ASTNode> normalize(Expression expression){
 		ArrayList<ASTNode> normalizedStatements = new ArrayList<>();
-		index = auxVariableIndex;
 		Stack<Object[]> stack = new Stack<>();
 		if(expression instanceof VariableDeclarationExpression){
 			for (Object fragment : ((VariableDeclarationExpression)expression).fragments()) {
 				stack.push(new Object[]{((VariableDeclarationFragment) fragment).getName(), ((VariableDeclarationFragment) fragment).getInitializer()});
 			}
 		}else if(expression instanceof Assignment){
-			stack.push(new Object[]{((Assignment)expression).getRightHandSide().toString(), ((Assignment)expression).getRightHandSide()});
+			stack.push(new Object[]{((Assignment)expression).getLeftHandSide().toString(), ((Assignment)expression).getRightHandSide()});
 		}else{
-			stack.push(new Object[]{auxVariablePrefix+index, expression});
+			stack.push(new Object[]{auxVariablePrefix+auxVariableIndex, expression});
 		}
 		while(!stack.isEmpty()){
 			Object[] indexAndExpression = stack.pop();
@@ -69,9 +69,12 @@ public class JavaExpressionNormalizer {
 			}
 		}
 		VariableDeclarationStatement variableDeclarationStatement = (VariableDeclarationStatement) normalizedStatements.get(0);
-		if(expression instanceof VariableDeclarationExpression){
-			variableDeclarationStatement.setType(((VariableDeclarationExpression)expression).getType());
-		}else if(!(expression instanceof Assignment)){
+		if(expression instanceof Assignment){
+			ExpressionStatement expressionStatement = (ExpressionStatement) javaFileHelper.parseStatement(
+					((Assignment)expression).getLeftHandSide().toString() + "=" 
+					+ ((VariableDeclarationFragment)variableDeclarationStatement.fragments().get(0)).getInitializer().toString() + ";");
+			normalizedStatements.set(0, expressionStatement.getExpression());
+		}else if(!(expression instanceof Assignment)&&!(expression instanceof VariableDeclarationExpression)){
 			normalizedStatements.set(0, ((VariableDeclarationFragment)variableDeclarationStatement.fragments().get(0)).getInitializer());
 		}
 		return normalizedStatements;
@@ -85,9 +88,9 @@ public class JavaExpressionNormalizer {
 		String separator = "";
 		for (Object argument : methodInvocation.arguments()) {
 			if(!isNormalized((Expression) argument)){
-				index++;
-				stack.push(new Object[]{auxVariablePrefix+index, argument});
-				generatedAssignment += separator + auxVariablePrefix+index;
+				auxVariableIndex++;
+				stack.push(new Object[]{auxVariablePrefix+auxVariableIndex, argument});
+				generatedAssignment += separator + auxVariablePrefix+auxVariableIndex;
 			}else{
 				generatedAssignment += separator + argument.toString();
 			}
@@ -104,9 +107,9 @@ public class JavaExpressionNormalizer {
 				+ " " + indexAndExpression[0] + " = ";
 		Expression operand = postfixExpression.getOperand();
 		if(!isNormalized(operand)){
-			index++;
-			stack.push(new Object[]{auxVariablePrefix+index, operand});
-			generatedAssignment += auxVariablePrefix+index;
+			auxVariableIndex++;
+			stack.push(new Object[]{auxVariablePrefix+auxVariableIndex, operand});
+			generatedAssignment += auxVariablePrefix+auxVariableIndex;
 		}else{
 			generatedAssignment += operand.toString();
 		}
@@ -122,9 +125,9 @@ public class JavaExpressionNormalizer {
 		Expression operand = prefixExpression.getOperand();
 		generatedAssignment += prefixExpression.getOperator().toString() + " ";
 		if(!isNormalized(operand)){
-			index++;
-			stack.push(new Object[]{auxVariablePrefix+index, operand});
-			generatedAssignment += auxVariablePrefix+index;
+			auxVariableIndex++;
+			stack.push(new Object[]{auxVariablePrefix+auxVariableIndex, operand});
+			generatedAssignment += auxVariablePrefix+auxVariableIndex;
 		}else{
 			generatedAssignment += operand.toString();
 		}
@@ -138,18 +141,18 @@ public class JavaExpressionNormalizer {
 				+ " " + indexAndExpression[0] + " = ";
 		Expression leftOperand = infixExpression.getLeftOperand();
 		if(!isNormalized(leftOperand)){
-			index++;
-			stack.push(new Object[]{auxVariablePrefix+index, leftOperand});
-			generatedAssignment += auxVariablePrefix+index;
+			auxVariableIndex++;
+			stack.push(new Object[]{auxVariablePrefix+auxVariableIndex, leftOperand});
+			generatedAssignment += auxVariablePrefix+auxVariableIndex;
 		}else{
 			generatedAssignment += leftOperand.toString();
 		}
 		generatedAssignment += " " + infixExpression.getOperator().toString() + " ";
 		Expression rightOperand = infixExpression.getRightOperand();
 		if(!isNormalized(rightOperand)){
-			index++;
-			stack.push(new Object[]{auxVariablePrefix+index, rightOperand});
-			generatedAssignment += auxVariablePrefix+index;
+			auxVariableIndex++;
+			stack.push(new Object[]{auxVariablePrefix+auxVariableIndex, rightOperand});
+			generatedAssignment += auxVariablePrefix+auxVariableIndex;
 		}else{
 			generatedAssignment += rightOperand.toString();
 		}

@@ -346,6 +346,10 @@ public class SecurityMonitorSynthesizer {
 		synthesizeControlledSTS();
 		stsHelper.saveAsDot(targetPath + File.separator +"controlledSts.dot");
 		makeUnmonitorableFree();
+//		List<Transition> transitions = stsHelper.getTransitions();
+//		for (Transition transition : transitions) {
+//			transition.setUpdate("");
+//		}
 		stsHelper.saveAsDot(targetPath + File.separator + "unmonitorableFreeSts.dot");
 	}
 }

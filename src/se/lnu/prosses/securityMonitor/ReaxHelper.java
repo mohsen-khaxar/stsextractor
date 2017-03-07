@@ -110,11 +110,11 @@ public class ReaxHelper {
 				minLocation = location;
 			}
 		}
-		String initialSection = "!initial\nLOC=" + minLocation + ";";
+		String initialSection = "!initial\nLOC=" + minLocation;
 		for (String securityInit : stsHelper.securityInits) {
-			initialSection += securityInit + ";\n";
+			initialSection += " and (" + securityInit + ")";
 		}
-		initialSection += "\n";
+		initialSection += ";\n";
 		return initialSection;
 	}
 
@@ -174,8 +174,7 @@ public class ReaxHelper {
 		Hashtable<String, String> transitionFunctions = new Hashtable<>();
 		transitionFunctions.put("LOC", "LOC' = -");
 		for (String variable : stsHelper.variables) {
-			String[] variableParts = variable.split(",");
-			transitionFunctions.put(variableParts[1], variableParts[1] + "' = -");
+			transitionFunctions.put(variable, variable + "' = -");
 		}
 		for (Transition transition : stsHelper.getTransitions()) {
 			transitionFunctions.put("LOC", transitionFunctions.get("LOC") + "else if " + transition.getAction() + " and LOC="	+ transition.getSource() 

@@ -13,6 +13,7 @@ import org.eclipse.jdt.core.dom.ASTVisitor;
 import org.eclipse.jdt.core.dom.Block;
 import org.eclipse.jdt.core.dom.ClassInstanceCreation;
 import org.eclipse.jdt.core.dom.CompilationUnit;
+import org.eclipse.jdt.core.dom.ConstructorInvocation;
 import org.eclipse.jdt.core.dom.Expression;
 import org.eclipse.jdt.core.dom.ITypeBinding;
 import org.eclipse.jdt.core.dom.MethodDeclaration;
@@ -20,6 +21,7 @@ import org.eclipse.jdt.core.dom.MethodInvocation;
 import org.eclipse.jdt.core.dom.SimpleName;
 import org.eclipse.jdt.core.dom.SingleVariableDeclaration;
 import org.eclipse.jdt.core.dom.Statement;
+import org.eclipse.jdt.core.dom.SwitchStatement;
 import org.eclipse.jdt.core.dom.TypeDeclaration;
 import org.eclipse.jdt.core.dom.rewrite.ASTRewrite;
 import org.eclipse.jdt.core.dom.rewrite.ListRewrite;
@@ -109,9 +111,7 @@ public class JavaFileHelper {
 		Document document = new Document(String.valueOf(Utils.readTextFile(javaFilePath)));
 		TextEdit edits = astRewrite.rewriteAST(document, null);
 		edits.apply(document);
-		Utils.writeTextFile(javaFilePath + ".normalized", document.get());
-		new File(javaFilePath).renameTo(new File(javaFilePath + "_"));
-		new File(javaFilePath + ".normalized").renameTo(new File(javaFilePath));
+		Utils.writeTextFile(javaFilePath, document.get());
 	}
 	
 	public void insertStatementAfter(ASTNode insertionPoint, ASTNode insertingNode) throws Exception{
@@ -127,8 +127,16 @@ public class JavaFileHelper {
 	
 	public void insertStatementBefore(ASTNode insertionPoint, ASTNode insertingNode) throws Exception{
 		ASTNode parent = insertionPoint.getParent();
-		if(insertionPoint instanceof Statement && insertingNode instanceof Statement && parent.getNodeType()==ASTNode.BLOCK){
-			ListRewrite listRewrite = astRewrite.getListRewrite(parent, Block.STATEMENTS_PROPERTY);
+		if(insertionPoint instanceof Statement && insertingNode instanceof Statement){
+			ListRewrite listRewrite = null;
+			if(parent.getNodeType()==ASTNode.BLOCK){
+				listRewrite = astRewrite.getListRewrite(parent, Block.STATEMENTS_PROPERTY);
+			}else if(parent.getNodeType()==ASTNode.SWITCH_STATEMENT){
+				listRewrite = astRewrite.getListRewrite(parent, SwitchStatement.STATEMENTS_PROPERTY);
+			}else{
+				throw new Exception("\"" + insertionPoint.toString() + "\" and \"" + insertingNode.toString() + "\" must be statement."
+						+ "\"" + insertionPoint.toString() + "\" could not be an insertion point. Because its parent is not a block statement.");
+			}
 			listRewrite.insertBefore(insertingNode, insertionPoint, null);
 		}else{
 			throw new Exception("\"" + insertionPoint.toString() + "\" and \"" + insertingNode.toString() + "\" must be statement."
@@ -165,6 +173,12 @@ public class JavaFileHelper {
 		return hasMethodInvocation;
 	}
 
+	public void insertStatementsBefore(ASTNode insertionPoint, List<ASTNode> normalizedExpression) throws Exception {
+		for (int i=normalizedExpression.size()-1; i>=0; i--) {
+			insertStatementBefore(insertionPoint, normalizedExpression.get(i));
+		}		
+	}
+	
 	public void insertStatementsBefore(ASTNode insertionPoint, List<ASTNode> normalizedExpression, int start, int end) throws Exception {
 		for (int i=end; i>=start; i--) {
 			insertStatementBefore(insertionPoint, normalizedExpression.get(i));
@@ -181,9 +195,12 @@ public class JavaFileHelper {
 		if(astNode instanceof MethodDeclaration){
 			qualiofiedName = ((MethodDeclaration) astNode).resolveBinding().getDeclaringClass().getQualifiedName() 
 					+ "." + ((MethodDeclaration) astNode).getName();
+		}else if(astNode instanceof MethodInvocation){
+			qualiofiedName = ((MethodInvocation) astNode).resolveMethodBinding().getDeclaringClass().getQualifiedName() 
+					+ "." + ((MethodInvocation) astNode).getName();
 		}else if(astNode instanceof ClassInstanceCreation){
 			qualiofiedName = ((ClassInstanceCreation)astNode).resolveConstructorBinding().getDeclaringClass().getQualifiedName()
-					+ "." + ((ClassInstanceCreation) astNode).getName();
+					+ "." + ((ClassInstanceCreation)astNode).resolveConstructorBinding().getDeclaringClass().getName();
 		}
 		return qualiofiedName;
 	}
@@ -235,5 +252,31 @@ public class JavaFileHelper {
 
 	public boolean isDummyMethod(Expression expression) {
 		return getQualifiedName(expression).startsWith(DUMMY_METHODS_CLASS);
+	}
+
+	public List<Statement> getLatestVersion(Statement statement) {
+		ListRewrite listRewrite = null;
+		if(statement.getNodeType()==ASTNode.BLOCK){
+			listRewrite = astRewrite.getListRewrite(statement, Block.STATEMENTS_PROPERTY);
+		}else if(statement.getNodeType()==ASTNode.SWITCH_STATEMENT){
+			listRewrite = astRewrite.getListRewrite(statement, SwitchStatement.STATEMENTS_PROPERTY);
+		}
+		ArrayList<Statement> latestVersion = new ArrayList<>();
+		for (Object object : listRewrite.getRewrittenList()) {
+			latestVersion.add((Statement) object);
+		}
+		return latestVersion;
+	}
+	
+	public String getLatestVersionCode(Statement statement) {
+		List<Statement> latestVersion = getLatestVersion(statement);
+		String latestVersionCode = "";
+		for (Statement statement2 : latestVersion) {
+			latestVersionCode += statement2.toString();
+		}
+		if(statement instanceof Block){
+			latestVersionCode = "{" + latestVersionCode + "}";
+		}
+		return latestVersionCode;
 	}
 }
