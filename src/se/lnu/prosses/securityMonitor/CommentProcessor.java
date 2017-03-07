@@ -54,30 +54,50 @@ public class CommentProcessor {
 	static public void process(String javaFilePath) throws Exception {
 		String code = String.valueOf(Utils.readTextFile(javaFilePath));
 		String regex = 
-//				+ "/\\*\\s*@\\s*(SecurityInit)\\s*[^\\)]+\\)\\s*\\*/" + "[^\\,;]+[\\,;]"
-//				+ "|"
-//				+ "/\\*\\s*@\\s*(SecurityPolicy)\\s*[^\\)]+\\)\\s*\\*/"	+ "[^\\,;]+[\\,;]"
-//				+ "|"
 				"\\s*/\\*\\s*@\\s*(ObservationPoint)\\s*\\*/" + "[^;]+;" 
 				+ "|"
-				+ "/\\*\\s*@\\s*((CheckPoint)|(EntryPoint))\\s*\\*/" + "[^\\{]*\\{";
+				+ "/\\*\\s*@\\s*((CheckPoint)|(EntryPoint))\\s*\\*/" + "[^\\{]*\\{"
+				+ "|"
+				+ "/\\*\\s*@\\s*(SecurityInit)\\s*[^\\)]+\\)\\s*\\*/[^\\;]+[\\;]";
 		Pattern pattern = Pattern.compile(regex);
         Matcher matcher = pattern.matcher(code);
         StringBuffer processedCode = new StringBuffer();
+        String securityInits = "";
+    	String processed = "";
         while (matcher.find()) {
         	String annotation = matcher.group();
-        	String processed = "";
         	if(annotation.contains("ObservationPoint")){
         		processed = processObservationPoint(annotation);
         	}else if(annotation.contains("EntryPoint")){
         		processed = processEntryPoint(annotation);
         	}else if(annotation.contains("CheckPoint")){
         		processed = processCheckPoint(annotation);
+        	}else if(annotation.contains("SecurityInit")){
+        		securityInits += processSecurityInit(annotation);
+        		processed = annotation.replaceAll("/\\*\\s*@\\s*(SecurityInit)\\s*[^\\)]+\\)\\s*\\*/", "");
+        	}else{
+        		throw new Exception(annotation + " is not a valid annotation.");
         	}
             matcher.appendReplacement(processedCode, processed);
         }
         matcher.appendTail(processedCode);
-		Utils.writeTextFile(javaFilePath, processedCode.toString());
+        processed = injectSecurityInits(processedCode.toString(), securityInits);
+		Utils.writeTextFile(javaFilePath, processed);
+	}
+
+	private static String injectSecurityInits(String code, String securityInits) {
+		code = code.replaceAll("//[^\n]*[\n]|/\\*.*\\*/", "");
+		String regex = "\\s*public[^;\\(]+[\\(][^;\\{]+\\{(.*entryPoint\\s*\\([^;]+;)?"; 
+		Pattern pattern = Pattern.compile(regex);
+        Matcher matcher = pattern.matcher(code);
+        StringBuffer processedCode = new StringBuffer();
+        while (matcher.find()) {
+        	String processed = matcher.group();
+        	processed += securityInits;
+            matcher.appendReplacement(processedCode, processed);
+        }
+        matcher.appendTail(processedCode);
+		return processedCode.toString();
 	}
 
 	private static String processSecurityInit(String annotation) throws Exception {

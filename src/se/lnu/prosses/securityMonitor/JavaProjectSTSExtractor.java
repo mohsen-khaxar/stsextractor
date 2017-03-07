@@ -241,4 +241,9 @@ public class JavaProjectSTSExtractor {
 	public void saveLocalVariableDeclarationScope(SimpleName variableName) {
 		localVariableDeclarationScopes.put(variableName.resolveBinding().getKey(), scopeIdStack.peek());	
 	}
+
+	public void revertToLastScope() {
+		scopeCounter--;
+		scopeIdStack.pop();		
+	}
 }

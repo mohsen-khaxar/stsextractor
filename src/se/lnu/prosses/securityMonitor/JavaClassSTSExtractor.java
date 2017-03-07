@@ -3,6 +3,7 @@ package se.lnu.prosses.securityMonitor;
 import java.util.Hashtable;
 import java.util.List;
 
+import org.eclipse.core.internal.expressions.EnablementExpression;
 import org.eclipse.jdt.core.dom.ASTNode;
 import org.eclipse.jdt.core.dom.Assignment;
 import org.eclipse.jdt.core.dom.Block;
@@ -164,13 +165,13 @@ public class JavaClassSTSExtractor {
 	@SuppressWarnings("unchecked")
 	private Integer processInit(MethodInvocation dummyMethodInvocation, Integer initialLocation) {
 		List<Expression> arguments = dummyMethodInvocation.arguments();
-		String securityPolicyExpression = getSecurityExpression(parent.rename(((CastExpression)arguments.get(0)).getExpression())
+		String securityInitExpression = getSecurityExpression(parent.rename(((CastExpression)arguments.get(0)).getExpression())
 				, ((StringLiteral)arguments.get(2)).getLiteralValue()) + "=";
-		securityPolicyExpression += ((StringLiteral)arguments.get(1)).getLiteralValue().equals("H") ? "true" : "false";
-		parent.stsHelper.setSecurityInit(securityPolicyExpression);
+		securityInitExpression += ((StringLiteral)arguments.get(1)).getLiteralValue().equals("H") ? "true" : "false";
+		parent.stsHelper.setSecurityInit(securityInitExpression);
 		List<Transition> outgoingTransitions = parent.stsHelper.getOutgoingTransitions(1);
 		for (Transition transition : outgoingTransitions) {
-			transition.setUpdate(transition.getUpdate() + securityPolicyExpression + ";");
+			transition.setUpdate(transition.getUpdate() + securityInitExpression + ";");
 		}
 		return initialLocation;
 	}
@@ -350,7 +351,9 @@ public class JavaClassSTSExtractor {
 		Hashtable<SimpleName, String> renamingRuleSet = getRenamingRuleSet(parameters, arguments);
 		String argumentAssignments = "";
 		for (int i=0; i< parameters.size(); i++) {
+			parent.enterScope();
 			String parameterUniqueName = parent.getUniqueName(parameters.get(i)).replaceAll("\\s", "");
+			parent.revertToLastScope();
 			String renamedArgument = parent.rename(arguments.get(i));
 			if(!renamingRuleSet.containsKey(parameters.get(i).toString())){
 				argumentAssignments += parameterUniqueName + "=" + renamedArgument + ";";

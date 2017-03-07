@@ -18,7 +18,7 @@ public class Main {
 		STSHelper stsHelper = stsExtractor.extract();
 		SecurityMonitorSynthesizer securityMonitorSynthesizer = new SecurityMonitorSynthesizer(stsHelper, targetPath);
 		securityMonitorSynthesizer.synthesize();
-		AspectJGenerator aspectJGenerator = new AspectJGenerator(stsHelper, javaProjectHelper, targetPath);
-		aspectJGenerator.generate();
+//		AspectJGenerator aspectJGenerator = new AspectJGenerator(stsHelper, javaProjectHelper, targetPath);
+//		aspectJGenerator.generate();
 	}
 }

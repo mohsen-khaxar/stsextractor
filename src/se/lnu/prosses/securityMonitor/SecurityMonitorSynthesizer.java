@@ -1,23 +1,15 @@
 package se.lnu.prosses.securityMonitor;
 
 import java.io.File;
-import java.io.FileWriter;
-import java.io.IOException;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Hashtable;
 import java.util.LinkedList;
 import java.util.List;
-import java.util.Map;
 import java.util.Queue;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-
-import org.eclipse.jdt.core.dom.MethodDeclaration;
-import org.eclipse.jdt.core.dom.SingleVariableDeclaration;
-import org.eclipse.jdt.core.dom.TypeDeclaration;
 
 public class SecurityMonitorSynthesizer {
 	STSHelper stsHelper;
@@ -37,7 +29,7 @@ public class SecurityMonitorSynthesizer {
 	
 	private void propagateInitialValues(boolean first){
 		Queue<Integer> queue = new LinkedList<>();
-		for (Transition transition : stsHelper.getOutgoingTransitions(0)) {
+		for (Transition transition : stsHelper.getOutgoingTransitions(1)) {
 			queue.add(transition.getTarget());
 		}
 		ArrayList<Integer> visited = new ArrayList<>();
@@ -47,15 +39,6 @@ public class SecurityMonitorSynthesizer {
 			for (Transition transition : stsHelper.getOutgoingTransitions(location)) {
 				String update = transition.getUpdate().replaceAll("==", "#").replaceAll("!=", "<>");
 				String newUpdate = update.replaceAll("\\s*=", "=");
-				for (String variable : initialValues.keySet()) {
-					if(!newUpdate.contains(variable+"=")){
-						String initialValue = initialValues.get(variable);
-						if(!first && initialValue.contains("{")){
-							initialValue = initialValue.substring(initialValue.indexOf("{"), initialValue.indexOf("}")).split(",")[1];
-						}
-						newUpdate = variable + "=" + initialValue + ";" + newUpdate;  
-					}
-				}
 				if(!first){
 					String regex = "\\{[\\w_$]+\\,\\s*(true|false|[-+]?\\d*\\.?\\d+)\\s*\\}";
 					Pattern pattern = Pattern.compile(regex);
@@ -63,11 +46,29 @@ public class SecurityMonitorSynthesizer {
 			        StringBuffer stringBuffer = new StringBuffer();
 			        while (matcher.find()) {
 			        	String variable = matcher.group();
-			        	variable = variable.substring(variable.indexOf("{"), variable.indexOf("}")).split(",")[0];
+			        	variable = variable.substring(variable.indexOf("{")+1, variable.indexOf("}")).split(",")[0];
 			        	matcher.appendReplacement(stringBuffer, variable);
 			        }
 			        matcher.appendTail(stringBuffer);
 			        newUpdate = stringBuffer.toString();
+			        if(!newUpdate.matches("\\s*")){
+			        	String[] parts = newUpdate.split(";");
+				        newUpdate = "";
+				        for (String part : parts) {
+							if(!part.split("=")[0].replaceAll("\\s", "").equals(part.split("=")[1].replaceAll("\\s", ""))){
+								newUpdate += part + ";";
+							}
+						}
+			        }
+				}
+				for (String variable : initialValues.keySet()) {
+					if(!newUpdate.contains(variable+"=")){
+						String initialValue = initialValues.get(variable);
+						if(first){
+							initialValue = "{" + variable + "," + initialValue + "}";
+						}
+						newUpdate = variable + "=" + initialValue + ";" + newUpdate;  
+					}
 				}
 				newUpdate = propagateInitialValuesAcrossUpdate(newUpdate);
 				transition.setUpdate(newUpdate.replaceAll("#", "==").replaceAll("<>", "!="));
@@ -76,6 +77,12 @@ public class SecurityMonitorSynthesizer {
 				}
 			}
 			visited.add(location);
+			try {
+				stsHelper.saveAsDot(targetPath + File.separator + "test.dot");
+			} catch (Exception e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
 		}
 	}
 	
@@ -92,11 +99,11 @@ public class SecurityMonitorSynthesizer {
 						for (int j = i+1; j < parts.length; j++) {
 							String leftHandSide2 = parts[j].split("=")[0].replaceAll("\\s", "");
 							String rightHandSide2 = parts[j].split("=")[1];
-							if(!leftHandSide.equals(leftHandSide2)||(" "+rightHandSide2+" ").matches(".*\\W"+leftHandSide+"\\W.*")){
-								parts[j] = parts[j].split("=")[0] + "=" + replace(parts[j].split("=")[1], leftHandSide, rightHandSide);
-							}else{
+							if(leftHandSide.equals(leftHandSide2)){
 								parts[i] = "";
 								break;
+							}else if((" "+rightHandSide2+" ").matches(".*\\W"+leftHandSide+"\\W.*")){
+								parts[j] = parts[j].split("=")[0] + "=" + replace(parts[j].split("=")[1], leftHandSide, rightHandSide);
 							}
 						}
 					}
@@ -120,6 +127,7 @@ public class SecurityMonitorSynthesizer {
 		for (Transition transition : incomingTransitions) {
 			String[] parts = transition.getUpdate().split(";");
 			ArrayList<String> leftHandSideVariables = new ArrayList<>();
+			HashSet<String> leftHandSides = new HashSet<>();
 			for (String part : parts) {
 				part = part.replaceAll("\\s", "");
 				if(!part.equals("")){
@@ -129,8 +137,12 @@ public class SecurityMonitorSynthesizer {
 					String regex = "\\s*(true|false|[-+]?\\d*\\.?\\d+)\\s*";
 					regex = "(" + regex + ")|(\\{[\\w_$]+\\," + regex + "\\})";
 					if(rightHandSide.matches(regex)){
+						leftHandSides.add(leftHandSide);
 						if(incomingInitialValues.get(leftHandSide)==null){
 							if(first){
+								if(rightHandSide.contains("{")){
+									rightHandSide = rightHandSide.replaceAll("\\{|\\}", "").split("\\,")[1];
+								}
 								incomingInitialValues.put(leftHandSide, rightHandSide);
 							}else{
 								incomingInitialValues.put(leftHandSide, "V");
@@ -153,11 +165,11 @@ public class SecurityMonitorSynthesizer {
 					}
 				}
 			}
-//			for (String variable : incomingInitialValues.keySet()) {
-//				if(!leftHandSideVariables.contains(variable)){
-//					incomingInitialValues.put(variable, "V");
-//				}
-//			}
+			for (String variable : incomingInitialValues.keySet()) {
+				if(!leftHandSides.contains(variable)){
+					incomingInitialValues.put(variable, "V");
+				}
+			}
 			first = false;
 		}
 		ArrayList<String> keys = new ArrayList<>();
@@ -173,7 +185,7 @@ public class SecurityMonitorSynthesizer {
 	private String replace(String string, String find, String replace) {
 		String regex = "\\W" + find + "\\W";
 		Pattern pattern = Pattern.compile(regex);
-		string = " " + string.replaceAll("\\{\\s*", "") + " ";
+		string = " " + string.replaceAll("\\{\\s*", "{") + " ";
         Matcher matcher = pattern.matcher(string);
         StringBuffer stringBuffer = new StringBuffer();
         while (matcher.find()) {
@@ -184,7 +196,7 @@ public class SecurityMonitorSynthesizer {
         	matcher.appendReplacement(stringBuffer, temp);
         }
         matcher.appendTail(stringBuffer);
-        return stringBuffer.toString();
+        return stringBuffer.toString().substring(1, stringBuffer.toString().length()-1);
 	}
 	
 	private void synthesizeControlledSTS() throws Exception{
