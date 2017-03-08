@@ -18,6 +18,7 @@ import org.eclipse.jdt.core.dom.MethodDeclaration;
 import org.eclipse.jdt.core.dom.MethodInvocation;
 import org.eclipse.jdt.core.dom.ReturnStatement;
 import org.eclipse.jdt.core.dom.SimpleName;
+import org.eclipse.jdt.core.dom.SingleVariableDeclaration;
 import org.eclipse.jdt.core.dom.Statement;
 import org.eclipse.jdt.core.dom.StringLiteral;
 import org.eclipse.jdt.core.dom.TryStatement;
@@ -55,6 +56,11 @@ public class JavaClassSTSExtractor {
 		String qualifiedMethodName = javaFileHelper.getQualifiedName(methodDeclaration);
 		String action = parent.stsHelper.addAction(qualifiedMethodName);
 		parent.stsHelper.addTransition(1, location, action, "true", "");
+		for (Object parameter : methodDeclaration.parameters()) {
+			parent.enterScope();
+			parent.saveLocalVariableDeclarationScope(((SingleVariableDeclaration) parameter).getName());
+			parent.revertToLastScope();
+		}
 		location = processStatement(methodDeclaration.getBody(), location);
 		return location;
 	}
@@ -251,16 +257,29 @@ public class JavaClassSTSExtractor {
 				throw new Exception("The code is not in the normal form.");
 			}
 		}
+		List<SimpleName> parameters = javaFileHelper.getMethodParameters(expression);
+		for (SimpleName parameter : parameters) {
+			parent.enterScope();
+			parent.saveLocalVariableDeclarationScope(parameter);
+			parent.revertToLastScope();
+		}
 		String methodArgumentsUpdates = processMethodArguments(expression);
 		Integer intermediateLocation = parent.newLocation();
 		parent.stsHelper.addTransition(initialLocation, intermediateLocation, STS.TAU, "true", methodArgumentsUpdates);
 		Integer finalLocation = parent.newLocation();
 		String action = parent.stsHelper.addAction(javaFileHelper.getQualifiedName(expression));
 		Hashtable<SimpleName, String> renamingRuleSet = parent.renamingRuleSets.peek();
-		Hashtable<String, String> argumentParameterMap = new Hashtable<>();
-		for (SimpleName parameter : renamingRuleSet.keySet()) {
-			argumentParameterMap.put(parent.getUniqueName(parameter), renamingRuleSet.get(parameter));
+		Hashtable<String, Object> argumentParameterMap = new Hashtable<>();
+		for (SimpleName parameter : parameters) {
+			if(renamingRuleSet.contains(parameter)){
+				argumentParameterMap.put(parent.getUniqueName(parameter), renamingRuleSet.get(parameter));
+			}else{
+				parent.enterScope();
+				argumentParameterMap.put(parent.getUniqueName(parameter), parent.getUniqueName(parameter));
+				parent.revertToLastScope();
+			}
 		}
+		argumentParameterMap.put("@status", "");
 		parent.stsHelper.addTransition(intermediateLocation, finalLocation, action, "true", "", argumentParameterMap);
 		finalLocation = processBlock(javaFileHelper.getMethodBody(expression), finalLocation);
 		if(newContext){

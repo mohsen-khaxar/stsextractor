@@ -116,11 +116,11 @@ public class JavaProjectSTSExtractor {
 					uniqueName += declaringName.replaceAll("\\.", "_");
 					stsHelper.uniqueNameJavaNameMap.put(uniqueName, name.toString());
 				}
-			}else if(resolveBinding.isParameter()){
+			}/*else if(resolveBinding.isParameter()){
 				declaringName = scopeIdStack.peek() + name.toString();
 				uniqueName += declaringName.replaceAll("\\.", "_");
 				stsHelper.uniqueNameJavaNameMap.put(uniqueName, name.toString());
-			}else{
+			}*/else{
 				declaringName = localVariableDeclarationScopes.get(resolveBinding.getKey()) + name.toString();
 				uniqueName += declaringName.replaceAll("\\.", "_");
 				stsHelper.uniqueNameJavaNameMap.put(uniqueName, name.toString());

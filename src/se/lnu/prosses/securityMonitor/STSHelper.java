@@ -66,7 +66,7 @@ public class STSHelper implements Cloneable{
 		monitorableActions.add(action);
 	}
 	
-	public void addTransition(Integer source, Integer target, String action, String guard, String update, Object extraData) {
+	public void addTransition(Integer source, Integer target, String action, String guard, String update, Hashtable<String, Object> extraData) {
 		addTransition(source, target, new Transition(action, guard, update, extraData));
 	}
 	

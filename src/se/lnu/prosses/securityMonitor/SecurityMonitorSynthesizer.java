@@ -222,7 +222,9 @@ public class SecurityMonitorSynthesizer {
 					if(!guard.matches("(true|\\sand\\s|\\sor\\s|\\s)*")){
 						guard = guard.replaceAll("\\s+", " ");
 						transition.setGuard(guard);
-						stsHelper.addTransition(transition.getSource(), transition.getTarget(), transition.getAction(), " not (" + guard + ")", "", STS.INSECURE);
+						Hashtable<String, Object> extraData = transition.getExtraData();
+						extraData.put("@status", STS.INSECURE);
+						stsHelper.addTransition(transition.getSource(), transition.getTarget(), transition.getAction(), " not (" + guard + ")", "", extraData);
 					}
 				}
 			}
@@ -277,7 +279,7 @@ public class SecurityMonitorSynthesizer {
 			String guard = guard1 + " and " + guard2;
 			guard = guard.replaceAll("\\s?true\\s?and\\s?", " ").replaceAll("\\s?and\\s?true\\s?", " ").replaceAll("\\s+", " ");
 			String update = incomingTransition.getUpdate() + outgoingTransition.getUpdate();
-			stsHelper.addTransition(incomingTransition.getSource(), outgoingTransition.getTarget(), incomingTransition.getAction(), guard, update);
+			stsHelper.addTransition(incomingTransition.getSource(), outgoingTransition.getTarget(), incomingTransition.getAction(), guard, update, incomingTransition.getExtraData());
 		}
 	}
 	

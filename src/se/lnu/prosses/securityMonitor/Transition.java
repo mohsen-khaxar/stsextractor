@@ -1,5 +1,7 @@
 package se.lnu.prosses.securityMonitor;
 
+import java.util.Hashtable;
+
 import org.jgrapht.graph.DefaultEdge;
 
 @SuppressWarnings("serial")
@@ -7,7 +9,7 @@ public class Transition extends DefaultEdge {
 	String action;
 	String guard;
 	String update;
-	Object extraData;
+	Hashtable<String, Object> extraData;
 	
 	public Transition(){
 		
@@ -19,7 +21,7 @@ public class Transition extends DefaultEdge {
 		this.update = update;
 	}
 
-	public Transition(String action, String guard, String update, Object extraData) {
+	public Transition(String action, String guard, String update, Hashtable<String, Object> extraData) {
 		this.action = action;
 		this.guard = guard;
 		this.update = update;
@@ -50,11 +52,11 @@ public class Transition extends DefaultEdge {
 		this.update = update;
 	}
 	
-	public Object getExtraData() {
+	public Hashtable<String, Object> getExtraData() {
 		return extraData;
 	}
 
-	public void setExtraData(Object extraData) {
+	public void setExtraData(Hashtable<String, Object> extraData) {
 		this.extraData = extraData;
 	}
 	

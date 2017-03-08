@@ -74,6 +74,8 @@ public class Utils {
 		  if (file.isDirectory()) {
 		    for (File file1 : file.listFiles())
 		    	deleteDirectory(file1);
+		  }else if(file.isFile()){
+			  file.delete();
 		  }
 	}
 }

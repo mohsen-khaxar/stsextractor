@@ -79,11 +79,19 @@ public class JavaFileHelper {
 	}
 	
 	public ASTNode parseStatement(String code) {
+		ASTNode res = parse(code, ASTParser.K_STATEMENTS);
+		return (ASTNode) ((Block)res).statements().get(0);
+	}
+
+	private ASTNode parse(String code, int type) {
 		ASTParser parser = ASTParser.newParser(AST.JLS4);
 		parser.setSource(code.toCharArray());
-		parser.setKind(ASTParser.K_STATEMENTS);
-		ASTNode res = parser.createAST(null);
-		return (ASTNode) ((Block)res).statements().get(0);
+		parser.setKind(type);
+		return parser.createAST(null);
+	}
+	
+	public ASTNode parseMethodDeclaration(String code) {
+		return ((TypeDeclaration)parse(code, ASTParser.K_CLASS_BODY_DECLARATIONS)).getMethods()[0];
 	}
 	
 	static Boolean has = false;
