@@ -20,7 +20,7 @@ public class AspectJGenerator {
 	
 	public void generate() throws IOException{
 		Utils.remakeDirectory(targetPath);
-		for (String monitorableAction : stsHelper.controllableActions) {
+		for (String monitorableAction : stsHelper.monitorableActions) {
 			String qualifiedMonitorableMethodName = stsHelper.getQualifiedMethodName(monitorableAction);
 			MethodDeclaration methodDeclaration = getMethodDeclaration(qualifiedMonitorableMethodName);
 			String parameters = methodDeclaration.parameters().toString().replace("[", "").replace("]", "");
@@ -50,10 +50,12 @@ public class AspectJGenerator {
 		code += "\tres = MonitorHelper.applyCountermeasure(\"" + qualifiedControllableMethodName + "\", target, thisJoinPoint.getArgs());\n";
 		code += "\tif(((Integer)res[0])==0){\n";
 		String args = "";
-		parts = parameters.replaceAll("  ", " ").split(" ");
-		int c = 2;
-		for (int i = 0; i < parts.length; i+=2) {
-			args += "(" + parts[i] + ")res[" + c++ + "], ";
+		if(!parameters.matches("\\s*")){
+			parts = parameters.replaceAll("  ", " ").split(" ");
+			int c = 2;
+			for (int i = 0; i < parts.length; i+=2) {
+				args += "(" + parts[i] + ")res[" + c++ + "], ";
+			}
 		}
 		code += "\treturn proceed(" + args + " target);\n";
 		code += "\t} else {\n";
@@ -123,7 +125,7 @@ public class AspectJGenerator {
 		sort(guardParts);		
 		for (String guardPart : guardParts) {
 			if(!guardPart.equals("")){
-				if(argumentParameterMap.get(guardPart)!=null){
+				if(argumentParameterMap!=null&&argumentParameterMap.get(guardPart)!=null){
 					guard = guard.replaceAll(guardPart, stsHelper.getJavaName(argumentParameterMap.get(guardPart).toString()));
 				}else{
 					guard = guard.replaceAll(guardPart, "target." + stsHelper.getJavaName(guardPart));

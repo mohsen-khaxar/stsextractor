@@ -13,16 +13,20 @@ public class STSHelper implements Cloneable{
 	public HashSet<String> controllableActions;
 	public HashSet<String> monitorableActions;
 	HashSet<String> variables;
-	public Hashtable<String, String> uniqueNameJavaNameMap;
+	public Hashtable<String, String[]> uniqueNameMetadatas;
 	public ArrayList<Object[]> securityPolicies;
 	public ArrayList<String> securityInits;
 	Hashtable<String, String> actionMethodMap;
 	STS sts;
+	static public String LOCAL = "L";
+	static public String PARAMETER = "P";
+	static public String STATICFIELD = "S";
+	static public String INSTANCEFIELD = "I";
 	public STSHelper() {
 		this.sts = new STS();
 		this.variables = new HashSet<>();
 		this.actions = new HashSet<>();
-		this.uniqueNameJavaNameMap = new Hashtable<>();
+		this.uniqueNameMetadatas = new Hashtable<>();
 		this.actionMethodMap = new Hashtable<>();
 		this.controllableActions = new HashSet<>();
 		this.monitorableActions = new HashSet<>();
@@ -158,6 +162,78 @@ public class STSHelper implements Cloneable{
 	}
 	
 	public String getJavaName(String uniqueName){
-		return uniqueNameJavaNameMap.get(uniqueName);
+		String res = null;
+		if(uniqueNameMetadatas.get(uniqueName)!=null){
+			res = uniqueNameMetadatas.get(uniqueName)[0];
+		}
+		return res;
+	}
+	
+	public String getJavaType(String uniqueName){
+		String res = null;
+		if(uniqueNameMetadatas.get(uniqueName)!=null){
+			res = uniqueNameMetadatas.get(uniqueName)[1];
+		}
+		return res;
+	}
+	
+	public String getDeclaringMethodName(String uniqueName){
+		String res = null;
+		if(uniqueNameMetadatas.get(uniqueName)!=null){
+			res = uniqueNameMetadatas.get(uniqueName)[2];
+		}
+		return res;
+	}
+	
+	public String getJavaScope(String uniqueName){
+		String res = null;
+		if(uniqueNameMetadatas.get(uniqueName)!=null){
+			res = uniqueNameMetadatas.get(uniqueName)[3];
+		}
+		return res;
+	}
+	
+	public void setJavaName(String uniqueName, String javaName){
+		String[] metadata = null; 
+		if(uniqueNameMetadatas.get(uniqueName)==null){
+			metadata = new String[4];
+		}else{
+			metadata = uniqueNameMetadatas.get(uniqueName);
+		}
+		metadata[0] = javaName;
+		uniqueNameMetadatas.put(uniqueName, metadata);
+	}
+	
+	public void setJavaType(String uniqueName, String javaType){
+		String[] metadata = null; 
+		if(uniqueNameMetadatas.get(uniqueName)==null){
+			metadata = new String[4];
+		}else{
+			metadata = uniqueNameMetadatas.get(uniqueName);
+		}
+		metadata[1] = javaType;
+		uniqueNameMetadatas.put(uniqueName, metadata);
+	}
+	
+	public void setDeclaringMethodName(String uniqueName, String declaringMethodName){
+		String[] metadata = null; 
+		if(uniqueNameMetadatas.get(uniqueName)==null){
+			metadata = new String[4];
+		}else{
+			metadata = uniqueNameMetadatas.get(uniqueName);
+		}
+		metadata[2] = declaringMethodName;
+		uniqueNameMetadatas.put(uniqueName, metadata);
+	}
+	
+	public void setJavaScope(String uniqueName, String javaScope){
+		String[] metadata = null; 
+		if(uniqueNameMetadatas.get(uniqueName)==null){
+			metadata = new String[4];
+		}else{
+			metadata = uniqueNameMetadatas.get(uniqueName);
+		}
+		metadata[3] = javaScope;
+		uniqueNameMetadatas.put(uniqueName, metadata);
 	}
 }

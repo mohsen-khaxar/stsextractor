@@ -3,8 +3,8 @@ package se.lnu.prosses.securityMonitor;
 import java.util.Hashtable;
 import java.util.List;
 
-import org.eclipse.core.internal.expressions.EnablementExpression;
 import org.eclipse.jdt.core.dom.ASTNode;
+import org.eclipse.jdt.core.dom.ASTVisitor;
 import org.eclipse.jdt.core.dom.Assignment;
 import org.eclipse.jdt.core.dom.Block;
 import org.eclipse.jdt.core.dom.CastExpression;
@@ -16,6 +16,7 @@ import org.eclipse.jdt.core.dom.ITypeBinding;
 import org.eclipse.jdt.core.dom.IfStatement;
 import org.eclipse.jdt.core.dom.MethodDeclaration;
 import org.eclipse.jdt.core.dom.MethodInvocation;
+import org.eclipse.jdt.core.dom.Name;
 import org.eclipse.jdt.core.dom.ReturnStatement;
 import org.eclipse.jdt.core.dom.SimpleName;
 import org.eclipse.jdt.core.dom.SingleVariableDeclaration;
@@ -46,7 +47,7 @@ public class JavaClassSTSExtractor {
 					&& methodDeclaration.getBody() != null 
 					&& (methodModifier.contains("public") || methodModifier.contains("protected"))) {
 				Integer finalLocation = processMethod(methodDeclaration);
-				parent.stsHelper.addTransition(finalLocation, 0, STS.TAU, "true", "");
+				parent.stsHelper.addTransition(finalLocation, 0, STS.MONITORABLE_ACTION, "true", "");
 			}
 		}
 	}
@@ -55,7 +56,7 @@ public class JavaClassSTSExtractor {
 		Integer location = parent.newLocation();
 		String qualifiedMethodName = javaFileHelper.getQualifiedName(methodDeclaration);
 		String action = parent.stsHelper.addAction(qualifiedMethodName);
-		parent.stsHelper.addTransition(1, location, action, "true", "");
+		parent.stsHelper.addTransition(1, location, action, "true", "LPC=false;");
 		for (Object parameter : methodDeclaration.parameters()) {
 			parent.enterScope();
 			parent.saveLocalVariableDeclarationScope(((SingleVariableDeclaration) parameter).getName());
@@ -161,23 +162,45 @@ public class JavaClassSTSExtractor {
 	@SuppressWarnings("unchecked")
 	private Integer processObserve(MethodInvocation dummyMethodInvocation, Integer observationLocation) throws Exception {
 		List<Expression> arguments = dummyMethodInvocation.arguments();
-		String securityPolicyExpression = getSecurityExpression(parent.rename(((CastExpression)arguments.get(0)).getExpression())
-				, ((StringLiteral)arguments.get(2)).getLiteralValue()) + "=";
-		securityPolicyExpression += ((StringLiteral)arguments.get(1)).getLiteralValue().equals("H") ? "true" : "false";
+		String variable = parent.rename(((CastExpression)arguments.get(0)).getExpression());
+		String policyTypes = ((StringLiteral)arguments.get(2)).getLiteralValue();
+		String securityLevels = ((StringLiteral)arguments.get(1)).getLiteralValue();
+		String securityPolicyExpression = getSecurityExpression(variable , policyTypes.substring(0, 1)) + "=";
+		securityPolicyExpression += securityLevels.substring(0, 1).equals("H") ? "true" : "false";
 		parent.stsHelper.setSecurityPolicy(securityPolicyExpression, observationLocation);
+		String update = securityPolicyExpression + ";";
+		if(policyTypes.length()==2){
+			securityPolicyExpression = getSecurityExpression(variable , policyTypes.substring(1, 2)) + "=";
+			securityPolicyExpression += securityLevels.substring(1, 2).equals("H") ? "true" : "false";
+		}
+		parent.stsHelper.setSecurityPolicy(securityPolicyExpression, observationLocation);
+		update +=  securityPolicyExpression + ";";
+		List<Transition> outgoingTransitions = parent.stsHelper.getOutgoingTransitions(1);
+		for (Transition transition : outgoingTransitions) {
+			transition.setUpdate(transition.getUpdate() + update);
+		}
 		return observationLocation;
 	}
 
 	@SuppressWarnings("unchecked")
 	private Integer processInit(MethodInvocation dummyMethodInvocation, Integer initialLocation) {
 		List<Expression> arguments = dummyMethodInvocation.arguments();
-		String securityInitExpression = getSecurityExpression(parent.rename(((CastExpression)arguments.get(0)).getExpression())
-				, ((StringLiteral)arguments.get(2)).getLiteralValue()) + "=";
-		securityInitExpression += ((StringLiteral)arguments.get(1)).getLiteralValue().equals("H") ? "true" : "false";
+		String variable = parent.rename(((CastExpression)arguments.get(0)).getExpression());
+		String policyTypes = ((StringLiteral)arguments.get(2)).getLiteralValue();
+		String securityLevels = ((StringLiteral)arguments.get(1)).getLiteralValue();
+		String securityInitExpression = getSecurityExpression(variable , policyTypes.substring(0, 1)) + "=";
+		securityInitExpression += securityLevels.substring(0, 1).equals("H") ? "true" : "false";
 		parent.stsHelper.setSecurityInit(securityInitExpression);
+		String update = securityInitExpression + ";";
+		if(policyTypes.length()==2){
+			securityInitExpression = getSecurityExpression(variable , policyTypes.substring(1, 2)) + "=";
+			securityInitExpression += securityLevels.substring(1, 2).equals("H") ? "true" : "false";
+		}
+		parent.stsHelper.setSecurityInit(securityInitExpression);
+		update += securityInitExpression + ";";
 		List<Transition> outgoingTransitions = parent.stsHelper.getOutgoingTransitions(1);
 		for (Transition transition : outgoingTransitions) {
-			transition.setUpdate(transition.getUpdate() + securityInitExpression + ";");
+			transition.setUpdate(transition.getUpdate() + update);
 		}
 		return initialLocation;
 	}
@@ -355,9 +378,20 @@ public class JavaClassSTSExtractor {
 		return securityExpression;		
 	}
 	
+	static String possibleModifiedsSecurityAssignments;
 	String getSecurityExpressionForPossibleModifieds(Statement statement){
-		String securityExpression = "";
-		return securityExpression;
+		possibleModifiedsSecurityAssignments = "";
+		if(statement!=null){
+			statement.accept(new ASTVisitor() {
+				@Override
+				public boolean visit(Assignment assignment) {
+					possibleModifiedsSecurityAssignments += "LI" + parent.getUniqueName((Name) assignment.getLeftHandSide())
+							+ "=" + "LI" + parent.getUniqueName((Name) assignment.getLeftHandSide()) + " or LPC;";
+					return true;
+				}
+			});
+		}
+		return possibleModifiedsSecurityAssignments;
 	}
 	
 	private boolean isThirdParty(Expression expression) {

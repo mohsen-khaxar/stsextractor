@@ -58,7 +58,7 @@ public class CommentProcessor {
 				+ "|"
 				+ "/\\*\\s*@\\s*((CheckPoint)|(EntryPoint))\\s*\\*/" + "[^\\{]*\\{"
 				+ "|"
-				+ "/\\*\\s*@\\s*(SecurityInit)\\s*[^\\)]+\\)\\s*\\*/[^\\;]+[\\;]";
+				+ "/\\*\\s*@\\s*(SecurityInit)\\s*[^\\)]+\\)\\s*\\*/[^\\;=]+[\\;=]";
 		Pattern pattern = Pattern.compile(regex);
         Matcher matcher = pattern.matcher(code);
         StringBuffer processedCode = new StringBuffer();

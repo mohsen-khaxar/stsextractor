@@ -222,7 +222,10 @@ public class SecurityMonitorSynthesizer {
 					if(!guard.matches("(true|\\sand\\s|\\sor\\s|\\s)*")){
 						guard = guard.replaceAll("\\s+", " ");
 						transition.setGuard(guard);
-						Hashtable<String, Object> extraData = transition.getExtraData();
+						Hashtable<String, Object> extraData = new Hashtable<>();
+						if(transition.getExtraData()!=null){
+							extraData.putAll(transition.getExtraData());
+						}
 						extraData.put("@status", STS.INSECURE);
 						stsHelper.addTransition(transition.getSource(), transition.getTarget(), transition.getAction(), " not (" + guard + ")", "", extraData);
 					}

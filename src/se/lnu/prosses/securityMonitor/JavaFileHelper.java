@@ -94,6 +94,10 @@ public class JavaFileHelper {
 		return ((TypeDeclaration)parse(code, ASTParser.K_CLASS_BODY_DECLARATIONS)).getMethods()[0];
 	}
 	
+	public Expression parseExpression(String code) {
+		return (Expression) parse(code, ASTParser.K_EXPRESSION);
+	}
+	
 	static Boolean has = false;
 	public boolean hasMethodInvokation(ASTNode node) {
 		has = false;
@@ -196,6 +200,14 @@ public class JavaFileHelper {
 	public void insertStatementsExceptFirstBefore(ASTNode insertionPoint, List<ASTNode> insertingNodes) throws Exception {
 		insertStatementsBefore(insertionPoint, insertingNodes, 1, insertingNodes.size()-1);
 		
+	}
+	
+	@SuppressWarnings("rawtypes")
+	public void insertStatementsInsteadOf(Statement insertionPoint, List insertingStatements) throws Exception {
+		for (Object insertingStatement : insertingStatements) {
+			insertStatementBefore(insertionPoint, (ASTNode) insertingStatement);
+		}
+		removeStatement(insertionPoint);
 	}
 
 	public String getQualifiedName(ASTNode astNode) {

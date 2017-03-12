@@ -110,20 +110,33 @@ public class JavaProjectSTSExtractor {
 				if(Modifier.isStatic(resolveBinding.getModifiers())){
 					declaringName = resolveBinding.getDeclaringClass().getQualifiedName() + "." + name.toString();
 					uniqueName += declaringName.replaceAll("\\.", "_");
-					stsHelper.uniqueNameJavaNameMap.put(uniqueName, declaringName);
+					stsHelper.setJavaName(uniqueName, declaringName);
+					stsHelper.setJavaType(uniqueName, resolveBinding.getType().getQualifiedName());
+					stsHelper.setJavaScope(uniqueName, STSHelper.STATICFIELD);
 				}else{
 					declaringName = thisContext.peek() + name.toString();
 					uniqueName += declaringName.replaceAll("\\.", "_");
-					stsHelper.uniqueNameJavaNameMap.put(uniqueName, name.toString());
+					stsHelper.setJavaName(uniqueName, name.toString());
+					stsHelper.setJavaType(uniqueName, resolveBinding.getType().getQualifiedName());
+					stsHelper.setJavaScope(uniqueName, STSHelper.INSTANCEFIELD);
 				}
 			}/*else if(resolveBinding.isParameter()){
 				declaringName = scopeIdStack.peek() + name.toString();
 				uniqueName += declaringName.replaceAll("\\.", "_");
 				stsHelper.uniqueNameJavaNameMap.put(uniqueName, name.toString());
 			}*/else{
+				String declaringMethodName = resolveBinding.getDeclaringMethod().getDeclaringClass().getQualifiedName() 
+						+ "." + resolveBinding.getDeclaringMethod().getName();
 				declaringName = localVariableDeclarationScopes.get(resolveBinding.getKey()) + name.toString();
 				uniqueName += declaringName.replaceAll("\\.", "_");
-				stsHelper.uniqueNameJavaNameMap.put(uniqueName, name.toString());
+				if(resolveBinding.isParameter()){
+					stsHelper.setJavaScope(uniqueName, STSHelper.PARAMETER);
+				}else{
+					stsHelper.setJavaScope(uniqueName, STSHelper.LOCAL);
+				}
+				stsHelper.setJavaName(uniqueName, name.toString());
+				stsHelper.setJavaType(uniqueName, resolveBinding.getType().getQualifiedName());
+				stsHelper.setDeclaringMethodName(uniqueName, declaringMethodName);
 			}
 		}
     	return uniqueName;

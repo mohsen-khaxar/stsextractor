@@ -1,17 +1,17 @@
 package se.lnu;
 
 import java.util.HashMap;
-
-import org.aspectj.lang.JoinPoint;
-import org.aspectj.lang.JoinPoint.StaticPart;
+import java.util.Hashtable;
 
 public class MonitorHelper {
 	static HashMap<Long, Integer> locations = new HashMap<>();
+	static Hashtable<String, Object> localVariableValues = new Hashtable<>();
+	static Hashtable<String, Boolean> securityLevels = new Hashtable<>();
 
-	static public Long getMonitorInstanceId(JoinPoint thisJoinPoint, StaticPart thisJoinPointStaticPart, StaticPart thisEnclosingJoinPointStaticPart) {
+	static public Long getMonitorInstanceId(Object thisObject) {
 		Long monitorInstanceId = Thread.currentThread().getId();
 		if(!locations.containsKey(monitorInstanceId)) {
-			locations.put(monitorInstanceId, 0);
+			locations.put(monitorInstanceId, 1);
 		}
 		return monitorInstanceId;
 	}
@@ -28,8 +28,28 @@ public class MonitorHelper {
 		locations.put(monitorInstanceId, currentLocation);
 	}
 
-	static public Object[] applyCountermeasure(String fullQualifiedMethodName, Object thisObject, Object[] parameters) {
-		// TODO Auto-generated method stub
-		return null;
+	static public Object[] applyCountermeasure(String fullQualifiedMethodName/*, Object thisObject, Object[] parameters*/) {
+		System.err.println("Countermeasures are applied for " + fullQualifiedMethodName);
+		return new Object[]{1};
+	}
+	
+	static public void throwException(Object thisObject, String message) {
+		System.err.println(message);
+	}
+
+	public static void setLocalVariableValue(String localVariableUniqueName, Object value) {
+		localVariableValues.put(localVariableUniqueName, value);
+	}
+
+	public static Object getLocalVariableValue(String localVariableUniqueName) {
+		return localVariableValues.get(localVariableUniqueName);
+	}
+
+	public static boolean getSecurityLevel(String variableName) {
+		return securityLevels.get(variableName)==null ? false : securityLevels.get(variableName);
+	}
+
+	public static void setSecurityLevel(String variableName, boolean securityLevel) {
+		securityLevels.put(variableName, securityLevel);		
 	}
 }

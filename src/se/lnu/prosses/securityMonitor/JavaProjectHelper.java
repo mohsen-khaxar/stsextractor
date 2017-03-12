@@ -24,13 +24,15 @@ public class JavaProjectHelper {
 		this.javaFileHelpers = new Hashtable<>();
 	}
 	
-	public void load() throws Exception{
+	public void load(boolean withNormalization) throws Exception{
 		ArrayList<String> javaFilePaths = getAllJavaFilePaths(sourcePath);
 		for (String javaFilePath : javaFilePaths) {
-			Files.copy(Paths.get(javaFilePath), Paths.get(javaFilePath + "_"), StandardCopyOption.REPLACE_EXISTING);
 			JavaFileHelper javaFileHelper = new JavaFileHelper(sourcePath, classPath, javaFilePath, this);
-			JavaClassNormalizer classNormalizer = new JavaClassNormalizer(javaFileHelper);
-			classNormalizer.normalize();
+			if(withNormalization){
+				Files.copy(Paths.get(javaFilePath), Paths.get(javaFilePath + "_"), StandardCopyOption.REPLACE_EXISTING);
+				JavaClassNormalizer classNormalizer = new JavaClassNormalizer(javaFileHelper);
+				classNormalizer.normalize();
+			}
 			javaFileHelper.load();
 			String qualifiedClassName = javaFileHelper.getQualifiedClassName();
 			if(qualifiedClassName!=null){
