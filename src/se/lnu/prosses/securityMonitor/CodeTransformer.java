@@ -371,20 +371,28 @@ public class CodeTransformer {
 		guard = guard.replaceAll(" and ", " && ");
 		guard = guard.replaceAll(" or ", " || " );
 		guard = guard.replaceAll(" not ", " ! ");
-		String[] guardParts = guard.replaceAll("\\W\\d+\\W|(\\s*true\\s*)|(\\s*false\\s*)|\\s", "").split("\\W+");
-		sort(guardParts);		
-		for (String guardPart : guardParts) {
-			if(!guardPart.equals("")){
-				if(guardPart.matches("\\s*L.+")){
-					guard = guard.replaceAll(guardPart, "se.lnu.MonitorHelper.getSecurityLevel(\"" + guardPart + "\")");
-				}else if(stsHelper.getJavaScope(guardPart).equals(STSHelper.LOCAL)){
-					guard = guard.replaceAll(guardPart, "(" + stsHelper.getJavaType(guardPart) + ") se.lnu.MonitorHelper.getLocalVariableValue(\"" + guardPart + "\")");
+		String regex = "[a-zA-Z_$][\\w_$]*"; 
+		Pattern pattern = Pattern.compile(regex);
+        Matcher matcher = pattern.matcher(guard);
+        StringBuffer processedCode = new StringBuffer();
+        while (matcher.find()) {
+        	String find = matcher.group();
+        	String replace = ""; 
+        	if(find.equals("true")||find.equals("false")||find.matches("(\\d*.)?\\d+")){
+				replace = find;
+			}else{
+				if(find.matches("\\s*L.+")){
+					replace = "se.lnu.MonitorHelper.getSecurityLevel(\"" + find + "\")";
+				}else if(stsHelper.getJavaScope(find).equals(STSHelper.LOCAL)){
+					replace = "(" + stsHelper.getJavaType(find) + ") se.lnu.MonitorHelper.getLocalVariableValue(\"" + find + "\")";
 				}else{
-					guard = guard.replaceAll(guardPart, stsHelper.getJavaName(guardPart));
+					replace = stsHelper.getJavaName(find);
 				}
 			}
-		}
-		return guard;
+			matcher.appendReplacement(processedCode, replace);
+        }
+        matcher.appendTail(processedCode);
+		return processedCode.toString();
 	}
 
 	private void sort(String[] guardParts) {
