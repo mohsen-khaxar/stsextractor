@@ -56,13 +56,16 @@ public class JavaProjectSTSExtractor {
 	}
 	
 	public STSHelper extract() throws Exception{
+		Utils.log(JavaProjectSTSExtractor.class, "STS extraction starts.");
 		for (JavaFileHelper javaFileHelper : javaProjectHelper.getAllJavaFileHelpers()) {
 			JavaClassSTSExtractor javaClassSTSExtractor = new JavaClassSTSExtractor(javaFileHelper, this);
 			javaClassSTSExtractor.extract();
 		}
 		javaProjectHelper.recoverOriginalJavaFiles();
+		Utils.log(JavaProjectSTSExtractor.class, "All original java files were recovered.");
 		stsHelper.saveAsDot(targetPath + File.separator + "sts.dot");
-		System.out.println("DONE.");
+		Utils.log(JavaProjectSTSExtractor.class, "STS graph was saved in \"" + targetPath + File.separator + "sts.dot" + "\"");
+		Utils.log(JavaProjectSTSExtractor.class, "STS extraction is done.");
 		return stsHelper;
 	}
 	

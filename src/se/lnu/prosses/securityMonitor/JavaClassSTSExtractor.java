@@ -48,8 +48,10 @@ public class JavaClassSTSExtractor {
 					&& (methodModifier.contains("public") || methodModifier.contains("protected"))) {
 				Integer finalLocation = processMethod(methodDeclaration);
 				parent.stsHelper.addTransition(finalLocation, 0, STS.MONITORABLE_ACTION, "true", "");
+				Utils.log(JavaClassSTSExtractor.class, "STS extraction is done for the method \"" + javaFileHelper.getQualifiedName(methodDeclaration) + "\"");
 			}
 		}
+		Utils.log(JavaClassSTSExtractor.class, "STS extraction is done for the class \"" + ((TypeDeclaration)compilationUnit.types().get(0)).resolveBinding().getQualifiedName() + "\"");
 	}
 
 	private Integer processMethod(MethodDeclaration methodDeclaration) throws Exception {

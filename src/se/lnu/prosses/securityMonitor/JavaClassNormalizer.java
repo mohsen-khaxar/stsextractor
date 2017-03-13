@@ -36,6 +36,7 @@ public class JavaClassNormalizer {
 	
 	public JavaClassNormalizer(JavaFileHelper javaFileHelper) throws Exception {
 		CommentProcessor.process(javaFileHelper.getJavaFilePath());
+		Utils.log(JavaClassNormalizer.class, "Comments were processed for \"" + javaFileHelper.getJavaFilePath() + "\"");
 		this.javaFileHelper = javaFileHelper;
 		javaFileHelper.load();
 		javaExpressionNormalizer = new JavaExpressionNormalizer(javaFileHelper, auxVariablePrefix);

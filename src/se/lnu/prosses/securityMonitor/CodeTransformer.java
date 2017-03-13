@@ -36,6 +36,7 @@ public class CodeTransformer {
 	public void transform() throws Exception{
 		Hashtable<String, String> advices = generateAdvices();
 		instrumentJavaProject(advices);
+		Utils.log(CodeTransformer.class, "Instrumentation is done.");
 	}
 
 	private void instrumentJavaProject(Hashtable<String, String> advices) throws Exception {
@@ -45,12 +46,15 @@ public class CodeTransformer {
 	}
 
 	private void instrumentJavaFile(JavaFileHelper javaFileHelper, Hashtable<String, String> advices) throws Exception {
+		Utils.log(CodeTransformer.class, "Instrumentation starts for the java file \"" + javaFileHelper.getJavaFilePath() + "\"");
 		CompilationUnit compilationUnit = javaFileHelper.getCompilationUnit();
 		MethodDeclaration[] methods = ((TypeDeclaration)compilationUnit.types().get(0)).getMethods();
 		for (MethodDeclaration methodDeclaration : methods) {
 			instrumentMethodBody(javaFileHelper, methodDeclaration.getBody(), advices);
+			Utils.log(CodeTransformer.class, "Instrumentation is done for the method \"" + javaFileHelper.getQualifiedName(methodDeclaration) + "\"");
 		}
 		javaFileHelper.saveModifiedJavaFile();
+		Utils.log(CodeTransformer.class, "Instrumentation is done for the java file \"" + javaFileHelper.getJavaFilePath() + "\"");
 	}
 
 	private void instrumentMethodBody(JavaFileHelper javaFileHelper, Block body, Hashtable<String, String> advices) throws Exception {
@@ -214,6 +218,7 @@ public class CodeTransformer {
 	}
 
 	private Hashtable<String, String> generateAdvices() throws IOException {
+		Utils.log(CodeTransformer.class, "Generating advices starts.");
 		Hashtable<String, String> advices = new Hashtable<>();
 		for (String monitorableAction : stsHelper.monitorableActions) {
 			String qualifiedMonitorableMethodName = stsHelper.getQualifiedMethodName(monitorableAction);
@@ -232,6 +237,7 @@ public class CodeTransformer {
 			code = mainPart.substring(0, mainPart.indexOf("@")) + "@{" + code + "}";
 			advices.put(qualifiedMonitorableMethodName, code);
 		}
+		Utils.log(CodeTransformer.class, "Generating advices is done.");
 		return advices;
 	}
 

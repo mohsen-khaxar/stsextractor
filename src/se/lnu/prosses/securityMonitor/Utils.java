@@ -11,6 +11,8 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
+import org.apache.log4j.Logger;
+
 public class Utils {
 	static public char[] readTextFile(String path){
 		String res = "";
@@ -77,5 +79,9 @@ public class Utils {
 		  }else if(file.isFile()){
 			  file.delete();
 		  }
+	}
+	
+	public static void log(Class<?> clazz, String message){
+		Logger.getLogger(clazz).info(message);
 	}
 }

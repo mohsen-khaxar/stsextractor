@@ -23,6 +23,8 @@ public class ReaxHelper {
 			FileWriter fileWriter = new FileWriter(new File(reaxScriptFile), false);
 			fileWriter.write(reaxScript);
 			fileWriter.close();
+			Utils.log(ReaxHelper.class, "Reax script was saved in \"" + reaxScriptFile + "\"");
+			Utils.log(ReaxHelper.class, "Execution of reax starts.");
 			Process process = Runtime.getRuntime().exec("reax  " + reaxScriptFile + " -a sS:d={P},deads -t --debug D2");
 			process.waitFor();
 		    BufferedReader bufferedReader = new BufferedReader(new InputStreamReader(process.getErrorStream()));
@@ -33,14 +35,22 @@ public class ReaxHelper {
 		} catch (Exception e) {
 			e.printStackTrace();
 		}
-		System.out.println(res);
+		Utils.log(ReaxHelper.class, "Reax result : " + res);
+		Utils.log(ReaxHelper.class, "Execution of reax is done.");
 		if(res.indexOf("Triangularized controller:\n")!=-1){
 			res = res.substring(res.indexOf("Triangularized controller:")+27);
 			res = res.substring(0, res.indexOf("["));
 		}else{
 			res = "";
 		}
-		return getSecurityGuards(res);
+		Hashtable<String, String> securityGuards = getSecurityGuards(res);
+		String message = "Synthesized security guards : ";
+		for (String key : securityGuards.keySet()) {
+			message += key + "=>" + securityGuards.get(key) + ";";
+		}
+		message = message.replaceAll("\\s+", " ");
+		Utils.log(ReaxHelper.class, message);
+		return securityGuards;
 	}
 	
 	Hashtable<String, String> getSecurityGuards(String reaxResult){
@@ -77,12 +87,14 @@ public class ReaxHelper {
 	}
 	
 	public String getReaxScript() throws Exception{
+		Utils.log(ReaxHelper.class, "Generating reax script starts.");
 		String stateSection = createStateSection();
 		String inputSection = createInputSection();
 		String controllableSection = createControllableSection();
 		String transitionSection = createTransitionSection();
 		String initialSection = createInitialSection();
 		String invariantSection = createInvariantSection();
+		Utils.log(ReaxHelper.class, "Generating reax script is done.");
 		return stateSection + inputSection + controllableSection + transitionSection + initialSection + invariantSection;
 	}
 

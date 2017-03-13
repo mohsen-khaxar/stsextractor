@@ -25,13 +25,16 @@ public class JavaProjectHelper {
 	}
 	
 	public void load(boolean withNormalization) throws Exception{
+		Utils.log(JavaProjectHelper.class, "Comment processing and normalization starts.");
 		ArrayList<String> javaFilePaths = getAllJavaFilePaths(sourcePath);
 		for (String javaFilePath : javaFilePaths) {
 			JavaFileHelper javaFileHelper = new JavaFileHelper(sourcePath, classPath, javaFilePath, this);
 			if(withNormalization){
 				Files.copy(Paths.get(javaFilePath), Paths.get(javaFilePath + "_"), StandardCopyOption.REPLACE_EXISTING);
+				Utils.log(JavaProjectHelper.class, "The original java file, \"" + javaFilePath + "\", is saved to \"" + javaFilePath + "_\"");
 				JavaClassNormalizer classNormalizer = new JavaClassNormalizer(javaFileHelper);
 				classNormalizer.normalize();
+				Utils.log(JavaProjectHelper.class, "Normalization is done for \"" + javaFileHelper.getJavaFilePath() + "\"");
 			}
 			javaFileHelper.load();
 			String qualifiedClassName = javaFileHelper.getQualifiedClassName();
@@ -39,6 +42,7 @@ public class JavaProjectHelper {
 				javaFileHelpers.put(qualifiedClassName, javaFileHelper);
 			}
 		}
+		Utils.log(JavaProjectHelper.class, "Comment processing and normalization are done.");
 	}
 	
 	static ArrayList<String> getAllJavaFilePaths(String directoryPath) {

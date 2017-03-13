@@ -10,6 +10,24 @@ public class Main {
 		ArrayList<String> includingFilter = new ArrayList<String>();
 		ArrayList<String> excludingFilter = new ArrayList<>();
 		includingFilter.add("se\\.lnu.*");
+		Utils.log(Main.class, "Synthesis starts.");
+		Utils.log(Main.class, "Source path : " + sourcePath);
+		Utils.log(Main.class, "Target path : " + targetPath);
+		String message = "Class path(es) : ";
+		for (String cp : classPath) {
+			message += cp + ":";
+		}
+		Utils.log(Main.class, message);
+		message = "Include filter(s) : ";
+		for (String ifl : includingFilter) {
+			message += ifl + ";";
+		}
+		Utils.log(Main.class, message);
+		message = "Exclude filter(s) : ";
+		for (String ef : excludingFilter) {
+			message += ef + ";";
+		}
+		Utils.log(Main.class, message);
 		JavaProjectHelper javaProjectHelper = new JavaProjectHelper(sourcePath, classPath);
 		javaProjectHelper.load(true);
 		JavaProjectSTSExtractor stsExtractor = new JavaProjectSTSExtractor(javaProjectHelper, includingFilter, excludingFilter, targetPath);
