@@ -6,48 +6,54 @@ import java.util.regex.Pattern;
 /**
  * This class extracts and processes all the security annotations declared in comments blocks and 
  * maps them to proper method invocations that are processed when an STS is generated.
- * The security annotations have syntax as the same as java annotation but are declared in comment blocks.
- * The following security annotations are used for declaring observation points, initializations, and check points:
- *\/*@ObservationPoint(
- * *{
- * *@SecurityPolicy(expression="...", securityLevel="..", policyType="..."),
- * *.
- * *.
- * *.
- * *}
- * *)
- * *\/ 
- * 
- * \/*@Init(
- * *{
- * *@SecurityPolicy(expression="...", securityLevel="..", policyType="..."),
- * *.
- * *.
- * *.
- * *}
- * *)
- * *\/ 
+ * The security annotations have syntax as well as java annotations but are declared in comment blocks.
+ * The following security annotations are employed for declaring observation points, entry points, check points, security policies, and initializations:
  * \/*@ObservationPoint*\/
  * \/*@EntryPoint*\/
  * \/*@CheckPoint*\/
  * \/*@SecurityPolicy(securityLevel="..", policyType="...")*\/
  * \/*@SecurityInit(securityLevel="..", policyType="...")*\/
  * 
- * Instead of the keywords expression, securityLevel, and policyType, it can be to use e, sl, and pt respectively.
+ * Instead of the keywords securityLevel and policyType, sl and pt may be used respectively.
  * Note that the security annotations must be just declared in comment blocks not comment line, otherwise they are ignored. 
- * The annotations @ObservationPoint and @Init must be declared just before of invocation of third-party methods while, 
- * the annotation @CheckPoint must be declared before method declarations.
+ * Each comment block just contains one annotation.
+ * The annotations @ObservationPoint must be declared just before invocation of third-party methods while, 
+ * the annotation @CheckPoint and @EntryPoint must be declared before method declarations. 
+ * The annotation @SecurityPolicy must be declared just before arguments of third-party method invocations and @SecurityInit must be used just before
+ * methods parameter or class field declarations. 
  * @author mohsen
  *
  */
 public class CommentProcessor {
 	/**
-	 * It processes all the comment blocks of the given source code to extract the comments declaring observation points, check points, initializations, and security policies.
-	 * Then, it replaces those comments with corresponding invocations of the methods \"se.lnu.checkPoint\", \"se.lnu.securityPolicy.observe\", and \"se.lnu.securityPolicy.init\" 
+	 * It processes all the comment blocks of the given source code to extract the comments declaring observation points, check points, entry points, initializations, and security policies.
+	 * Then, it replaces those comments with corresponding invocations of the methods \"se.lnu.DummyMethods.checkPoint\", \"se.lnu.DummyMethods.entryPoint\", \"se.lnu.DummyMethods.init\", \"se.lnu.DummyMethods.observe\"  
 	 * and finally it overwrites the old java file with the processed source code. 
 	 * The injected method invocations are processed when an STS is generated instead of comment blocks.
-	 * Each security policy must be declared in one comment line in the following form : @SecurityPolicy(expression="...", securityLevel="...", policyType="...").
+	 * Each security security or initialization must be declared in one comment block in the following form : @[SecurityPolicy|SecurityInit](securityLevel="...", policyType="...")
+	 * where securityLevel and policyType may be one or two characters. The first character in securityLevel shows the security level of the expression of interest with the policy type specified by the first character of policyType.
+	 * The second character works as well as the first one. The characters "H" and "L" are used to indicate high and low security levels while "I" and "X" are shown the policy types implicit and explicit respectively. 
 	 * Since the parameters are defined as key-value list, it is allowed to change their order.
+	 * The following is a code snippet containing all the security annotations :
+	 * 
+	 * public class CaseStudy {
+	 * .
+	 * .
+	 * .
+	 * \/*@SecurityInit(securityLevel="LL", policyType="XI")*\/int friendLocation;
+	 * 
+	 * \/* @CheckPoint *\/
+	 * \/* @EntryPoint *\/
+	 * public void run(\/*@SecurityInit(securityLevel="HL", policyType="XI")*\/int sl) {
+	 * 	int estimate = 0;
+	 *	estimate = estimatLocation(sl);
+	 *	\/* @ObservationPoint *\/
+	 *	System.out.println(\/* @SecurityPolicy(securityLevel="LL", policyType="XI") *\/estimate);
+	 * }
+	 * .
+	 * .
+	 * .
+	 * }
 	 * @param javaFilePath indicates to path of a java file
 	 * @throws Exception is thrown when some parameters of a security policy were wrongly defined
 	 */
@@ -64,6 +70,7 @@ public class CommentProcessor {
         StringBuffer processedCode = new StringBuffer();
         String securityInits = "";
     	String processed = "";
+//    	extracts all the comment blocks containing security annotation
         while (matcher.find()) {
         	String annotation = matcher.group();
         	if(annotation.contains("ObservationPoint")){
@@ -73,33 +80,54 @@ public class CommentProcessor {
         	}else if(annotation.contains("CheckPoint")){
         		processed = processCheckPoint(annotation);
         	}else if(annotation.contains("SecurityInit")){
+//        		in this case, gathers all security initialization assignments to inject them in the beginning of every method that is annotated as an entry point
         		securityInits += processSecurityInit(annotation);
         		processed = annotation.replaceAll("/\\*\\s*@\\s*(SecurityInit)\\s*[^\\)]+\\)\\s*\\*/", "");
         	}else{
         		throw new Exception(annotation + " is not a valid annotation.");
         	}
+//        	replaces generated method invocations with the comment block.
             matcher.appendReplacement(processedCode, processed);
         }
         matcher.appendTail(processedCode);
+//      injects all the security initialization assignments in the beginning of every method that is annotated as an entry point 
+//      note that \"se.lnu.DummyMethods.entryPoint\" must be injected before the security initialization assignments
         processed = injectSecurityInits(processedCode.toString(), securityInits);
 		Utils.writeTextFile(javaFilePath, processed);
 	}
 
-	private static String injectSecurityInits(String code, String securityInits) {
+	
+	/**
+	 * It injects the content of securityInits that shows security initialization assignments in the beginning of every method annotated as an entry point.
+	 * @param code is a source code containing java class declaration that is target of injection
+	 * @param securityInits are security initialization assignments that must be injected in the beginning of every entry point
+	 * @return is code in which securityInits is injected
+	 */
+	public static String injectSecurityInits(String code, String securityInits) {
 		code = code.replaceAll("//[^\n]*[\n]|/\\*.*\\*/", "");
 		String regex = "\\s*public[^;\\(]+[\\(][^;\\{]+\\{(.*entryPoint\\s*\\([^;]+;)?"; 
 		Pattern pattern = Pattern.compile(regex);
         Matcher matcher = pattern.matcher(code);
         StringBuffer processedCode = new StringBuffer();
+//    	extracts signature of all the public method annotated as entry point
         while (matcher.find()) {
         	String processed = matcher.group();
         	processed += securityInits;
+//        	append securityInits after the character '{' that is the beginning of the method
             matcher.appendReplacement(processedCode, processed);
         }
         matcher.appendTail(processedCode);
 		return processedCode.toString();
 	}
 
+	/**
+	 * It generates the method invocation \"se.lnu.DummyMethods.init\" based on annotation declaring a security initialization.
+	 * It extracts the parameter that comes immediately after @SecurityInit declaration 
+	 * and passes it along with security level and policy type to \"se.lnu.DummyMethods.init\".
+	 * @param annotation contains a comment block declaring a @SecurityInit along with a parameter declaration that is target of the annotation
+	 * @return is the method invocation that defines a security initialization based on annotation
+	 * @throws Exception rethrows the exception raised by the method getWellOrderedParameters
+	 */
 	private static String processSecurityInit(String annotation) throws Exception {
 		String wellOrderedParameters = getWellOrderedParameters(annotation);
 		String processed = annotation.replaceAll("/\\*\\s*@\\s*(SecurityInit)\\s*[^\\)]+\\)\\s*\\*/\\s*", "");
@@ -108,6 +136,14 @@ public class CommentProcessor {
 		return processed;
 	}
 
+	/**
+	 * It generates the method invocation \"se.lnu.DummyMethods.observe\" based on annotation declaring a security policy.
+	 * It extracts the argument or the class field that comes immediately after @SecurityPolicy declaration 
+	 * and passes it along with security level and policy type to \"se.lnu.DummyMethods.observe\".
+	 * @param annotation contains a comment block declaring a @SecurityPolicy along with a argument or a class field declaration that is target of the annotation
+	 * @return is the method invocation that defines a security policy based on annotation
+	 * @throws Exception rethrows the exception raised by the method getWellOrderedParameters
+	 */
 	private static String processSecurityPolicy(String annotation) throws Exception {
 		String wellOrderedParameters = getWellOrderedParameters(annotation);
 		String processed = annotation.replaceAll("/\\*\\s*@\\s*(SecurityPolicy)\\s*[^\\)]+\\)\\s*\\*/", "");
