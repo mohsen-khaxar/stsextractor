@@ -15,7 +15,8 @@ public class MonitorHelper {
 	static Hashtable<String, Boolean> securityLevels = new Hashtable<>();
 	
 	static{
-		localVariableValues.put("@isCheckPoint", false);
+		localVariableValues.put("@isCheckPoint", true);
+		se.lnu.MonitorHelper.setLocalVariableValue("@mode", false);
 	}
 
 	static public Long getMonitorInstanceId(Object thisObject) {
@@ -38,9 +39,9 @@ public class MonitorHelper {
 		locations.put(monitorInstanceId, currentLocation);
 	}
 
-	static public Object[] applyCountermeasure(String fullQualifiedMethodName/*, Object thisObject, Object[] parameters*/) {
-		System.err.println("Countermeasures are applied for " + fullQualifiedMethodName);
-		return new Object[]{1};
+	static public Object[] applyCountermeasure(Long monitorInstanceId, String fullQualifiedMethodName/*, Object thisObject, Object[] parameters*/) {
+		System.err.println("There is no countermeasures for " + fullQualifiedMethodName);
+		return new Object[]{0};
 	}
 	
 	static public void throwException(Object thisObject, String message) {

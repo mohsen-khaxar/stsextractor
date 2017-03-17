@@ -60,7 +60,7 @@ public class CommentProcessor {
 	static public void process(String javaFilePath) throws Exception {
 		String code = String.valueOf(Utils.readTextFile(javaFilePath));
 		String regex = 
-				"\\s*/\\*\\s*@\\s*(ObservationPoint)\\s*\\*/" + "[^;]+;" 
+				"\\s*/\\*\\s*@\\s*(ObservationPoint)[^\\*]*\\*/" + "[^;]+;" 
 				+ "|"
 				+ "/\\*\\s*@\\s*((CheckPoint)|(EntryPoint))\\s*\\*/" + "[^\\{]*\\{"
 				+ "|"
@@ -74,7 +74,7 @@ public class CommentProcessor {
         while (matcher.find()) {
         	String annotation = matcher.group();
         	if(annotation.contains("ObservationPoint")){
-        		processed = processObservationPoint(annotation);
+        		processed = processObservationPoint(annotation, matcher.start());
         	}else if(annotation.contains("EntryPoint")){
         		processed = processEntryPoint(annotation);
         	}else if(annotation.contains("CheckPoint")){
@@ -221,15 +221,32 @@ public class CommentProcessor {
 	 * It extracts all the security policies declared in an observation point and then maps each of them to a proper statement 
 	 * invoking the methods \"se.lnu.securityPolicy.observe\".
 	 * @param observationPoint an observation point that is declared in a comment block
+	 * @param i 
 	 * @return one or more statements invoking the methods \"se.lnu.securityPolicy.observe\"
 	 * @throws Exception is thrown when some parameters of a security policy were wrongly defined
 	 */
-	private static String processObservationPoint(String observationPoint) throws Exception {
-		String processed = observationPoint.replaceAll("\\s*/\\*\\s*@\\s*ObservationPoint\\s*\\*/", "");
-		String regex = "/\\*\\s*@\\s*SecurityPolicy\\s*[^\\)]+\\)\\s*\\*/[^\\,\\)]+[\\,\\)]";
+	private static String processObservationPoint(String observationPoint, int startPosition) throws Exception {
+		String regex = "\\s*/\\*\\s*@\\s*ObservationPoint[^\\*]*\\*/\\s*";
 		Pattern pattern = Pattern.compile(regex);
-        Matcher matcher = pattern.matcher(processed);
+        Matcher matcher = pattern.matcher(observationPoint);
         StringBuffer stringBuffer = new StringBuffer();
+        while (matcher.find()) {
+        	String annotation = matcher.group();
+        	if(!annotation.contains("default")){
+        		annotation = "";
+        	}else{
+        		annotation = annotation.replaceAll("\\s*/\\*\\s*@\\s*ObservationPoint[^\\=]+\\=", 
+        				"se.lnu.DummyMethods.countermeasure(" + (startPosition+annotation.length()) + ", ")
+        				.replaceAll("\\*/", "")+ ";";
+        	}
+        	matcher.appendReplacement(stringBuffer, annotation);
+        }
+        matcher.appendTail(stringBuffer);
+        String processed = stringBuffer.toString();
+		regex = "/\\*\\s*@\\s*SecurityPolicy\\s*[^\\)]+\\)\\s*\\*/[^\\,\\)]+[\\,\\)]";
+		pattern = Pattern.compile(regex);
+        matcher = pattern.matcher(processed);
+        stringBuffer = new StringBuffer();
         String observes = "";
         while (matcher.find()) {
         	String annotation = matcher.group();

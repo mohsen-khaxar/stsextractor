@@ -17,6 +17,7 @@ public class STSHelper implements Cloneable{
 	public ArrayList<Object[]> securityPolicies;
 	public ArrayList<String> securityInits;
 	Hashtable<String, String> actionMethodMap;
+	Hashtable<Integer, String> defaultActions;
 	STS sts;
 	STS savedVersionSts;
 	static public String LOCAL = "L";
@@ -34,6 +35,7 @@ public class STSHelper implements Cloneable{
 		this.monitorableActions.add(addAction("se.lnu.DummyMethods.monitorablePoint"));
 		this.securityPolicies = new ArrayList<>();
 		this.securityInits = new ArrayList<>();
+		this.defaultActions = new Hashtable<>();
 	}
 	
 	@Override
@@ -254,5 +256,9 @@ public class STSHelper implements Cloneable{
 
 	public void restoreLastVersion() {
 		sts = savedVersionSts;		
+	}
+
+	public void setDefaultAction(Integer observationPointStartPosition, String defaultAction) {
+		defaultActions.put(observationPointStartPosition, defaultAction);		
 	}
 }

@@ -17,6 +17,7 @@ import org.eclipse.jdt.core.dom.IfStatement;
 import org.eclipse.jdt.core.dom.MethodDeclaration;
 import org.eclipse.jdt.core.dom.MethodInvocation;
 import org.eclipse.jdt.core.dom.Name;
+import org.eclipse.jdt.core.dom.NumberLiteral;
 import org.eclipse.jdt.core.dom.ReturnStatement;
 import org.eclipse.jdt.core.dom.SimpleName;
 import org.eclipse.jdt.core.dom.SingleVariableDeclaration;
@@ -129,10 +130,22 @@ public class JavaClassSTSExtractor {
 			finalLocation = processEntryPoint(dummyMethodInvocation, initialLocation);
 		}else if(dummyMethodInvocation.getName().toString().equals("monitorablePoint")){
 			finalLocation = processMonitorablePoint(dummyMethodInvocation, initialLocation);
+		}else if(dummyMethodInvocation.getName().toString().equals("countermeasure")){
+			finalLocation = processCountermeasure(dummyMethodInvocation, initialLocation);
 		}else{
 			throw new Exception(dummyMethodInvocation.getName() + " is not pre-defined.");
 		}
 		return finalLocation;
+	}
+
+	@SuppressWarnings("unchecked")
+	private Integer processCountermeasure(MethodInvocation dummyMethodInvocation, Integer initialLocation) {
+		List<Expression> arguments = dummyMethodInvocation.arguments();
+		Integer observationPointStartPosition = Integer.valueOf(arguments.get(0).toString());
+		String defaultAction = arguments.get(1).toString();
+		defaultAction = defaultAction.substring(1, defaultAction.length()-1);
+		parent.stsHelper.setDefaultAction(observationPointStartPosition, defaultAction);
+		return initialLocation;
 	}
 
 	private Integer processMonitorablePoint(MethodInvocation dummyMethodInvocation, Integer initialLocation) {

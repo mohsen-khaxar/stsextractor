@@ -75,7 +75,14 @@ public class CodeTransformer {
 				}
 			}
 		}
-		if(!(statement instanceof Block)){
+		if(stsHelper.defaultActions.containsKey(statement.getStartPosition())){
+			String code = "if((boolean)se.lnu.MonitorHelper.getLocalVariableValue(\"@mode\")){"
+					+ stsHelper.defaultActions.get(statement.getStartPosition()) + ";"
+					+ "}else{"
+					+ statement.toString()
+					+ "}";
+			javaFileHelper.insertStatementInsteadOf(statement, javaFileHelper.parseStatement(code));
+		}else if(!(statement instanceof Block)){
 			List<Expression> methodInvocations = getMethodInvocations(statement);
 			String transformedCode = statement.toString();
 			boolean modified = false;
@@ -254,27 +261,12 @@ public class CodeTransformer {
 			code += generatePreMainPart(qualifiedMonitorableMethodName, isStatic);
 			String mainPart = generateMainPart(monitorableAction, isStatic);
 			code += mainPart.substring(mainPart.indexOf("@")+1, mainPart.length());
-			code += generatePostMainPart(qualifiedMonitorableMethodName, parameters, isStatic);
+			code += generatePostMainPart(qualifiedMonitorableMethodName, parameters);
 			code = mainPart.substring(0, mainPart.indexOf("@")) + "@{" + code + "}";
 			advices.put(qualifiedMonitorableMethodName, code);
 		}
 		Utils.log(CodeTransformer.class, "Generating advices is done.");
 		return advices;
-	}
-
-	private String generatePostMainPart(String qualifiedControllableMethodName, String parameters, boolean isStatic)
-			throws IOException {
-		String code = "";
-		code += "se.lnu.MonitorHelper.setCurrentLocation(monitorInstanceId, currentLocation);\n";
-		code += "if(violation){\n";
-		code += "\tObject[] res = se.lnu.MonitorHelper.applyCountermeasure(\"" + qualifiedControllableMethodName + "\");\n";
-		code += "\tif(((Integer)res[0])!=0){\n";
-		code += "\tse.lnu.MonitorHelper.removeMonitorInstanceId(monitorInstanceId);\n";
-		code += "\tse.lnu.MonitorHelper.throwException(";
-		code += isStatic ? qualifiedControllableMethodName + ".class" : "this";
-		code += ", \"Security Violation\");\n\t}\n";
-		code += "}\n";
-		return code;
 	}
 
 	private String generatePreMainPart(String qualifiedMethodName, boolean isStatic) throws IOException {
@@ -286,7 +278,7 @@ public class CodeTransformer {
 		code += "\tboolean violation=false;\n";
 		return code;
 	}
-
+	
 	private String generateMainPart(String monitorableAction, boolean isStatic) throws IOException {
 		boolean check = false;
 		String code = "";
@@ -322,6 +314,20 @@ public class CodeTransformer {
 		code += "\n";
 		localVariables = removeDuplicates(localVariables);
 		code = localVariables + "@" + code;
+		return code;
+	}
+	
+	private String generatePostMainPart(String qualifiedControllableMethodName, String parameters)
+			throws IOException {
+		String code = "";
+		code += "se.lnu.MonitorHelper.setCurrentLocation(monitorInstanceId, currentLocation);\n";
+		code += "if(violation){\n";
+		code += "\tObject[] res = se.lnu.MonitorHelper.applyCountermeasure(monitorInstanceId, \"" + qualifiedControllableMethodName + "\");\n";
+		code += "\tif(((Integer)res[0])!=0){\n";
+		code += "se.lnu.MonitorHelper.setLocalVariableValue(\"@mode\", false);";
+		code += "\n\t}";
+		code += "else{se.lnu.MonitorHelper.setLocalVariableValue(\"@mode\", true);\n}\n";
+		code += "}\n";
 		return code;
 	}
 
