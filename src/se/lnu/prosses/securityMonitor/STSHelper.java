@@ -18,6 +18,7 @@ public class STSHelper implements Cloneable{
 	public ArrayList<String> securityInits;
 	Hashtable<String, String> actionMethodMap;
 	STS sts;
+	STS savedVersionSts;
 	static public String LOCAL = "L";
 	static public String PARAMETER = "P";
 	static public String STATICFIELD = "S";
@@ -245,5 +246,13 @@ public class STSHelper implements Cloneable{
 		}
 		metadata[3] = javaScope;
 		uniqueNameMetadatas.put(uniqueName, metadata);
+	}
+
+	public void saveVersion() {
+		savedVersionSts = (STS) sts.clone();		
+	}
+
+	public void restoreLastVersion() {
+		sts = savedVersionSts;		
 	}
 }

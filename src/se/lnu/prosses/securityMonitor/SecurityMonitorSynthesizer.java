@@ -204,6 +204,7 @@ public class SecurityMonitorSynthesizer {
 	private void synthesizeControlledSTS() throws Exception{
 		Hashtable<String, String> securityGuards = reaxHelper.run();
 		Utils.log(SecurityMonitorSynthesizer.class, "Creation of controlled STS starts.");
+//		stsHelper.restoreLastVersion();
 		if(!securityGuards.isEmpty()){
 			Set<Transition> transitions = new HashSet<>();
 			transitions.addAll(stsHelper.getTransitions());
@@ -362,6 +363,7 @@ public class SecurityMonitorSynthesizer {
 	}
 	
 	public void synthesize() throws Exception{
+		stsHelper.saveVersion();
 		propagateInitialValues();
 		stsHelper.saveAsDot(targetPath + File.separator + "initValuesPropagatedSts.dot");
 		Utils.log(SecurityMonitorSynthesizer.class, "Initial-value-propagated STS graph was saved in \"" + targetPath + File.separator + "initValuesPropagatedSts.dot" + "\"");
@@ -369,10 +371,6 @@ public class SecurityMonitorSynthesizer {
 		stsHelper.saveAsDot(targetPath + File.separator +"controlledSts.dot");
 		Utils.log(SecurityMonitorSynthesizer.class, "Controlled STS graph was saved in \"" + targetPath + File.separator +"controlledSts.dot" + "\"");
 		makeUnmonitorableFree();
-//		List<Transition> transitions = stsHelper.getTransitions();
-//		for (Transition transition : transitions) {
-//			transition.setUpdate("");
-//		}
 		stsHelper.saveAsDot(targetPath + File.separator + "unmonitorableFreeSts.dot");
 		Utils.log(SecurityMonitorSynthesizer.class, "Unmonitorable-free STS graph was saved in \"" + targetPath + File.separator + "unmonitorableFreeSts.dot" + "\"");
 	}

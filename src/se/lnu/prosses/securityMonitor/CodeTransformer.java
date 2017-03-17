@@ -17,6 +17,7 @@ import org.eclipse.jdt.core.dom.DoStatement;
 import org.eclipse.jdt.core.dom.EnhancedForStatement;
 import org.eclipse.jdt.core.dom.Expression;
 import org.eclipse.jdt.core.dom.ForStatement;
+import org.eclipse.jdt.core.dom.IfStatement;
 import org.eclipse.jdt.core.dom.MethodDeclaration;
 import org.eclipse.jdt.core.dom.MethodInvocation;
 import org.eclipse.jdt.core.dom.Modifier;
@@ -83,6 +84,8 @@ public class CodeTransformer {
 				modified = true;
 				Statement innerStatement = getInnerStatement(statement);
 				String advice = advices.get("se.lnu.DummyMethods.monitorablePoint").substring(advices.get("se.lnu.DummyMethods.monitorablePoint").indexOf("@")+1);
+				advice = advice.substring(0, advice.indexOf("if(violation){")) + "}";
+				advice = advice.replace("boolean violation=false;", "");
 				String localVariablesSection = getLocalVariablesSection(javaFileHelper, javaFileHelper.getQualifiedName(body.getParent())
 						, "se.lnu.DummyMethods.monitorablePoint", advices);
 				if(innerStatement instanceof Block){
@@ -111,9 +114,11 @@ public class CodeTransformer {
 						auxVariableIndex++;
 						transformedCode = transformedCode.replaceAll(methodInvocations.get(i).toString().replaceAll("\\(", "\\\\(").replaceAll("\\)", "\\\\)"), auxVariable);
 						String methodInvocationSection = typeQualifiedName + " " + auxVariable + "=" + methodInvocations.get(i).toString() + ";";
-						transformedCode = localVariablesSection + methodInvocationSection + transformedCode;
+						transformedCode = localVariablesSection + "se.lnu.MonitorHelper.setLocalVariableValue(\"@isCheckPoint\", true);" 
+						+ methodInvocationSection + transformedCode + "se.lnu.MonitorHelper.setLocalVariableValue(\"@isCheckPoint\", false);";
 					}else{
-						transformedCode = localVariablesSection + transformedCode;
+						transformedCode = localVariablesSection + "se.lnu.MonitorHelper.setLocalVariableValue(\"@isCheckPoint\", true);" 
+								+ transformedCode + "se.lnu.MonitorHelper.setLocalVariableValue(\"@isCheckPoint\", false);";
 					}
 				}
 			}
@@ -146,7 +151,12 @@ public class CodeTransformer {
 		String advice = advices.get(methodQualifiedName);
 		if(advice!=null){
 			String adviceCode = advice.substring(advice.indexOf("@")+1);
-			javaFileHelper.insertStatementBefore((ASTNode) body.statements().get(0), javaFileHelper.parseStatement(adviceCode));
+			adviceCode = "if((boolean)se.lnu.MonitorHelper.getLocalVariableValue(\"@isCheckPoint\"))" + adviceCode;
+			if(!body.statements().isEmpty()){
+				javaFileHelper.insertStatementBefore((ASTNode) body.statements().get(0), javaFileHelper.parseStatement(adviceCode));
+			}else{
+				javaFileHelper.insertStatementInsteadOf(body, javaFileHelper.parseStatement("{" + javaFileHelper.parseStatement(adviceCode) + "}"));
+			}
 		}
 	}
 
@@ -178,10 +188,21 @@ public class CodeTransformer {
 				while(!parent.equals(statement)&&!(parent instanceof Block)){
 					parent = parent.getParent();
 				}
-				if(parent.equals(statement)){
+				if(parent.equals(statement)&&!isUnderBranch(node)){
 					methodInvocations.add(node);
 				}
 				return true;
+			}
+			private boolean isUnderBranch(ASTNode node) {
+				boolean isUnderBranch = false;
+				while(!(node instanceof MethodDeclaration)){
+					node = node.getParent();
+					if(node instanceof WhileStatement || node instanceof IfStatement){
+						isUnderBranch = true;
+						break;
+					}
+				}
+				return isUnderBranch;
 			}
 			@Override
 			public boolean visit(ClassInstanceCreation node) {
@@ -189,7 +210,7 @@ public class CodeTransformer {
 				while(!parent.equals(statement)&&!(parent instanceof Block)){
 					parent = parent.getParent();
 				}
-				if(parent.equals(statement)){
+				if(parent.equals(statement)&&!isUnderBranch(node)){
 					methodInvocations.add(node);
 				}
 				return true;
@@ -305,35 +326,48 @@ public class CodeTransformer {
 	}
 
 	private String getSecurityAssignments(String update) {
-		String SecurityAssignments = "";
+		String securityAssignments = "";
 		if(!update.matches("\\s*")){
 			String[] assignments = update.split(";");
 			for (String assignment : assignments) {
 				if(assignment.matches("\\s*L.+")){
-					assignment = assignment.replaceAll("\\sor\\s", "||").replaceAll("\\snot\\s", "!");
-					String leftHandSide = assignment.split("=")[0];
-					String rightHandSide = assignment.split("=")[1];
-					String regex = "[a-zA-Z_$][\\w_$]*"; 
-					Pattern pattern = Pattern.compile(regex);
-			        Matcher matcher = pattern.matcher(rightHandSide);
-			        StringBuffer processedCode = new StringBuffer();
-			        while (matcher.find()) {
-			        	String find = matcher.group();
-			        	String replace = ""; 
-			        	if(find.equals("true")||find.equals("false")){
-							replace = find;
-						}else{
-							replace = "se.lnu.MonitorHelper.getSecurityLevel(\"" + find + "\")";
-						}
-						matcher.appendReplacement(processedCode, replace);
-			        }
-			        matcher.appendTail(processedCode);
-			        SecurityAssignments += "se.lnu.MonitorHelper.setSecurityLevel(\"" + leftHandSide + "\", " + processedCode.toString() + ");";
+					securityAssignments += assignment + ";";
 				}
 			}
 		}
-		return SecurityAssignments;
+		return "se.lnu.MonitorHelper.setSecurityLevel(\"" + securityAssignments + "\");";
 	}
+	
+//	private String getSecurityAssignments(String update) {
+//		String securityAssignments = "";
+//		if(!update.matches("\\s*")){
+//			String[] assignments = update.split(";");
+//			for (String assignment : assignments) {
+//				if(assignment.matches("\\s*L.+")){
+//					assignment = assignment.replaceAll("\\sor\\s", "||").replaceAll("\\snot\\s", "!");
+//					String leftHandSide = assignment.split("=")[0];
+//					String rightHandSide = assignment.split("=")[1];
+//					String regex = "[a-zA-Z_$][\\w_$]*"; 
+//					Pattern pattern = Pattern.compile(regex);
+//			        Matcher matcher = pattern.matcher(rightHandSide);
+//			        StringBuffer processedCode = new StringBuffer();
+//			        while (matcher.find()) {
+//			        	String find = matcher.group();
+//			        	String replace = ""; 
+//			        	if(find.equals("true")||find.equals("false")){
+//							replace = find;
+//						}else{
+//							replace = "se.lnu.MonitorHelper.getSecurityLevel(\"" + find + "\")";
+//						}
+//						matcher.appendReplacement(processedCode, replace);
+//			        }
+//			        matcher.appendTail(processedCode);
+//			        securityAssignments += "se.lnu.MonitorHelper.setSecurityLevel(\"" + leftHandSide + "\", " + processedCode.toString() + ");";
+//				}
+//			}
+//		}
+//		return securityAssignments;
+//	}
 
 	private String removeDuplicates(String localVariables) {
 		String[] parts = localVariables.split(",");

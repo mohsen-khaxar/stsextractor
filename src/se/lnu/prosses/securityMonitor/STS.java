@@ -20,4 +20,15 @@ public class STS extends AbstractBaseGraph<Integer, Transition> implements Direc
 	public STS() {
 		super(ef, true, true);
 	}
+	
+	@Override
+	public Object clone() {
+		STS clonedSts = new STS();
+		for (Transition transition : this.edgeSet()) {
+			clonedSts.addVertex(transition.getSource());
+			clonedSts.addVertex(transition.getTarget());
+			clonedSts.addEdge(transition.getSource(), transition.getTarget(), (Transition) transition.clone());
+		}
+		return clonedSts;
+	}
 }

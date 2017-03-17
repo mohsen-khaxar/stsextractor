@@ -340,10 +340,13 @@ public class JavaClassSTSExtractor {
 		parent.stsHelper.addTransition(initialLocation, loopEntranceLocation, STS.TAU, whileExpression, lpcUpdate);
 		boolean wasUnderBranch = underBranch;
 		underBranch = true;
+		int securityPolicyStartIndex = parent.stsHelper.getSecurityPolicyIndex() + 1;
 		Integer finalLocationInLoop = processStatement(whileStatement.getBody(), loopEntranceLocation);
+		int securityPolicyEndIndex = parent.stsHelper.getSecurityPolicyIndex();
 		underBranch = wasUnderBranch;
 		parent.stsHelper.addTransition(finalLocationInLoop, initialLocation, STS.TAU, "true", "LPC=" + lpcStackVariable + ";");
 		Integer loopExitLocation = parent.newLocation();
+		parent.stsHelper.readdSecurityPolicies(securityPolicyStartIndex, securityPolicyEndIndex, loopExitLocation);
 		parent.stsHelper.addTransition(initialLocation, loopExitLocation, STS.TAU, "  not (" + whileExpression + ")", 
 				lpcUpdate + getSecurityExpressionForPossibleModifieds(whileStatement.getBody()));
 		Integer finalLocation = parent.newLocation();
@@ -367,13 +370,15 @@ public class JavaClassSTSExtractor {
 		Integer finalThenLocation = processStatement(ifStatement.getThenStatement(), thenLocation);
 		int thenSecurityPolicyEndIndex = parent.stsHelper.getSecurityPolicyIndex();
 		Integer finalElseLocation = elseLocation;
+		int elseSecurityPolicyStartIndex = 0;
+		int elseSecurityPolicyEndIndex = -1;
 		if(ifStatement.getElseStatement()!=null){
-			int elseSecurityPolicyStartIndex = parent.stsHelper.getSecurityPolicyIndex() + 1;
+			elseSecurityPolicyStartIndex = parent.stsHelper.getSecurityPolicyIndex() + 1;
 			finalElseLocation = processStatement(ifStatement.getElseStatement(), elseLocation);
-			int elseSecurityPolicyEndIndex = parent.stsHelper.getSecurityPolicyIndex();
-			parent.stsHelper.readdSecurityPolicies(thenSecurityPolicyStartIndex, thenSecurityPolicyEndIndex, finalElseLocation);
-			parent.stsHelper.readdSecurityPolicies(elseSecurityPolicyStartIndex, elseSecurityPolicyEndIndex, finalThenLocation);
+			elseSecurityPolicyEndIndex = parent.stsHelper.getSecurityPolicyIndex();
 		}
+		parent.stsHelper.readdSecurityPolicies(thenSecurityPolicyStartIndex, thenSecurityPolicyEndIndex, finalElseLocation);
+		parent.stsHelper.readdSecurityPolicies(elseSecurityPolicyStartIndex, elseSecurityPolicyEndIndex, finalThenLocation);
 		underBranch = wasUnderBranch;
 		Integer finalLocation = parent.newLocation();
 		parent.stsHelper.addTransition(finalThenLocation, finalLocation, STS.TAU, "true", "LPC=" + lpcStackVariable + ";");
