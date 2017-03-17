@@ -32,10 +32,12 @@ public class JavaClassSTSExtractor {
 
 	JavaFileHelper javaFileHelper;
 	private JavaProjectSTSExtractor parent;
+	private boolean underBranch;
 	
 	public JavaClassSTSExtractor(JavaFileHelper javaFileHelper, JavaProjectSTSExtractor parent) {
 		this.javaFileHelper = javaFileHelper;
 		this.parent = parent;
+		this.underBranch = false;
 	}
 
 	public void extract() throws Exception {
@@ -292,7 +294,6 @@ public class JavaClassSTSExtractor {
 		Integer intermediateLocation = parent.newLocation();
 		parent.stsHelper.addTransition(initialLocation, intermediateLocation, STS.TAU, "true", methodArgumentsUpdates);
 		Integer finalLocation = parent.newLocation();
-		String action = parent.stsHelper.addAction(javaFileHelper.getQualifiedName(expression));
 		Hashtable<SimpleName, String> renamingRuleSet = parent.renamingRuleSets.peek();
 		Hashtable<String, Object> argumentParameterMap = new Hashtable<>();
 		for (SimpleName parameter : parameters) {
@@ -305,6 +306,12 @@ public class JavaClassSTSExtractor {
 			}
 		}
 		argumentParameterMap.put("@status", "");
+		String action;
+		if(underBranch){
+			action = STS.TAU;
+		}else{
+			action = parent.stsHelper.addAction(javaFileHelper.getQualifiedName(expression));
+		}
 		parent.stsHelper.addTransition(intermediateLocation, finalLocation, action, "true", "", argumentParameterMap);
 		finalLocation = processBlock(javaFileHelper.getMethodBody(expression), finalLocation);
 		if(newContext){
@@ -331,7 +338,10 @@ public class JavaClassSTSExtractor {
 		String lpcStackVariable = parent.getLPCUniqueName();
 		String lpcUpdate = lpcStackVariable + "=LPC;" + "LPC=" + getSecurityExpression(whileExpression, "I") + " or LPC;";
 		parent.stsHelper.addTransition(initialLocation, loopEntranceLocation, STS.TAU, whileExpression, lpcUpdate);
+		boolean wasUnderBranch = underBranch;
+		underBranch = true;
 		Integer finalLocationInLoop = processStatement(whileStatement.getBody(), loopEntranceLocation);
+		underBranch = wasUnderBranch;
 		parent.stsHelper.addTransition(finalLocationInLoop, initialLocation, STS.TAU, "true", "LPC=" + lpcStackVariable + ";");
 		Integer loopExitLocation = parent.newLocation();
 		parent.stsHelper.addTransition(initialLocation, loopExitLocation, STS.TAU, "  not (" + whileExpression + ")", 
@@ -351,11 +361,20 @@ public class JavaClassSTSExtractor {
 		Integer elseLocation = parent.newLocation();
 		parent.stsHelper.addTransition(initialLocation, elseLocation, STS.TAU, "not (" + ifExpression + ")", 
 				lpcUpdate + getSecurityExpressionForPossibleModifieds(ifStatement.getThenStatement()));
+		boolean wasUnderBranch = underBranch;
+		underBranch = true;
+		int thenSecurityPolicyStartIndex = parent.stsHelper.getSecurityPolicyIndex() + 1;
 		Integer finalThenLocation = processStatement(ifStatement.getThenStatement(), thenLocation);
+		int thenSecurityPolicyEndIndex = parent.stsHelper.getSecurityPolicyIndex();
 		Integer finalElseLocation = elseLocation;
 		if(ifStatement.getElseStatement()!=null){
+			int elseSecurityPolicyStartIndex = parent.stsHelper.getSecurityPolicyIndex() + 1;
 			finalElseLocation = processStatement(ifStatement.getElseStatement(), elseLocation);
+			int elseSecurityPolicyEndIndex = parent.stsHelper.getSecurityPolicyIndex();
+			parent.stsHelper.readdSecurityPolicies(thenSecurityPolicyStartIndex, thenSecurityPolicyEndIndex, finalElseLocation);
+			parent.stsHelper.readdSecurityPolicies(elseSecurityPolicyStartIndex, elseSecurityPolicyEndIndex, finalThenLocation);
 		}
+		underBranch = wasUnderBranch;
 		Integer finalLocation = parent.newLocation();
 		parent.stsHelper.addTransition(finalThenLocation, finalLocation, STS.TAU, "true", "LPC=" + lpcStackVariable + ";");
 		parent.stsHelper.addTransition(finalElseLocation, finalLocation, STS.TAU, "true", "LPC=" + lpcStackVariable + ";");

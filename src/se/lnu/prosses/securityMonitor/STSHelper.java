@@ -106,6 +106,16 @@ public class STSHelper implements Cloneable{
 	public void setSecurityPolicy(String securityPolicyExpression, Integer observationLocation) {
 		securityPolicies.add(new Object[]{observationLocation, securityPolicyExpression});	
 	}
+	
+	public int getSecurityPolicyIndex(){
+		return securityPolicies.size()-1;
+	}
+	
+	public void readdSecurityPolicies(int startIndex, int endIndex, Integer observationLocation){
+		for (int i = startIndex; i <= endIndex; i++) {
+			securityPolicies.add(new Object[]{observationLocation, securityPolicies.get(i)[1]});
+		}
+	}
 
 	public void setSecurityInit(String securityInitExpression) {
 		securityInits.add(securityInitExpression);
