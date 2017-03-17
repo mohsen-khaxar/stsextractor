@@ -4,9 +4,9 @@ import java.util.ArrayList;
 
 public class Main {
 	public static void main(String[] args) throws Exception {
-		String sourcePath = "/home/mohsen/workspace/test/src/";
-		String targetPath = "/home/mohsen/workspace/test/src/";
-		String[] classPath = new String[]{"/home/mohsen/workspace/test/src", "/home/mohsen/git/stsextractor/src"};
+		String sourcePath = "/home/mohsen/git/runningexample/src";
+		String targetPath = "/home/mohsen/git/runningexample/src";
+		String[] classPath = new String[]{"/home/mohsen/git/runningexample/src", "/home/mohsen/git/stsextractor/src"};
 		ArrayList<String> includingFilter = new ArrayList<String>();
 		ArrayList<String> excludingFilter = new ArrayList<>();
 		includingFilter.add("se\\.lnu.*");
