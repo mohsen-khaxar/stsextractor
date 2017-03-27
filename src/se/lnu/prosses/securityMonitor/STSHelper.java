@@ -261,4 +261,9 @@ public class STSHelper implements Cloneable{
 	public void setDefaultAction(Integer observationPointStartPosition, String defaultAction) {
 		defaultActions.put(observationPointStartPosition, defaultAction);		
 	}
+
+	public void appendUpdate(Integer sourcelLocation, Integer targetLocation, String appending) {
+		String update = sts.getEdge(sourcelLocation, targetLocation).getUpdate();
+		sts.getEdge(sourcelLocation, targetLocation).setUpdate(update + appending);
+	}
 }

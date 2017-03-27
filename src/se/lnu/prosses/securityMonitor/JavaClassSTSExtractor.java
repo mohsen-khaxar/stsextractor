@@ -372,11 +372,9 @@ public class JavaClassSTSExtractor {
 		Integer thenLocation = parent.newLocation();
 		String lpcStackVariable = parent.getLPCUniqueName();
 		String lpcUpdate = lpcStackVariable	+ "=LPC;" + "LPC=" + getSecurityExpression(ifExpression, "I") + " or LPC;";
-		parent.stsHelper.addTransition(initialLocation, thenLocation, STS.TAU, ifExpression, 
-				lpcUpdate + getSecurityExpressionForPossibleModifieds(ifStatement.getElseStatement()));
+		parent.stsHelper.addTransition(initialLocation, thenLocation, STS.TAU, ifExpression, lpcUpdate);
 		Integer elseLocation = parent.newLocation();
-		parent.stsHelper.addTransition(initialLocation, elseLocation, STS.TAU, "not (" + ifExpression + ")", 
-				lpcUpdate + getSecurityExpressionForPossibleModifieds(ifStatement.getThenStatement()));
+		parent.stsHelper.addTransition(initialLocation, elseLocation, STS.TAU, "not (" + ifExpression + ")", lpcUpdate);
 		boolean wasUnderBranch = underBranch;
 		underBranch = true;
 		int thenSecurityPolicyStartIndex = parent.stsHelper.getSecurityPolicyIndex() + 1;
@@ -390,6 +388,8 @@ public class JavaClassSTSExtractor {
 			finalElseLocation = processStatement(ifStatement.getElseStatement(), elseLocation);
 			elseSecurityPolicyEndIndex = parent.stsHelper.getSecurityPolicyIndex();
 		}
+		parent.stsHelper.appendUpdate(initialLocation, thenLocation, getSecurityExpressionForPossibleModifieds(ifStatement.getElseStatement()));
+		parent.stsHelper.appendUpdate(initialLocation, elseLocation, getSecurityExpressionForPossibleModifieds(ifStatement.getThenStatement()));
 		parent.stsHelper.readdSecurityPolicies(thenSecurityPolicyStartIndex, thenSecurityPolicyEndIndex, finalElseLocation);
 		parent.stsHelper.readdSecurityPolicies(elseSecurityPolicyStartIndex, elseSecurityPolicyEndIndex, finalThenLocation);
 		underBranch = wasUnderBranch;
