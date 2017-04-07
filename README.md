@@ -1,8 +1,8 @@
-Install :
+INSTALL :
 1. Install REAX following the instructions in http://nberth.space/opam
 2. Build the project using maven.
 
-Usage :
+USAGE :
 1. Annotate your java application using security annotations.
 2. set the variables "sourcePath", "targetPath", "classPath", and "includingFilter" with proper values 
 in the method "se.lnu.prosses.securityMonitor.Main.main"
@@ -14,7 +14,7 @@ in the method "se.lnu.prosses.securityMonitor.Main.main"
 3. Build and run our application
 4. Put our application in your application class path and build and run yours
 
-Security Annotations :
+SECURITY ANNOTATIONS :
 
 /\*@ObservationPoint\*/ must be declared just before invocation of third-party methods and determined an observation point.
 
