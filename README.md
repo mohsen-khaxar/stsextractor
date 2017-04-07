@@ -31,8 +31,8 @@ and specifies the initial security level for the mentioned method parameter or c
 Annotations Example  : 
 
 
+```java
 package se.lnu;
-
 public class CaseStudy {
 	/*@SecurityInit(securityLevel="LL", policyType="XI")*/int location=2;
 	/*@SecurityInit(securityLevel="LL", policyType="XI")*/int MaxDistance=10;
@@ -89,5 +89,6 @@ public class CaseStudy {
 		return (location2 - location1) * (location2 - location1);
 	}
 }
+```
 
 
