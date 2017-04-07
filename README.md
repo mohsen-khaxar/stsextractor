@@ -16,16 +16,16 @@ in the method "se.lnu.prosses.securityMonitor.Main.main"
 
 Security Annotations :
 
-/*@ObservationPoint*/ must be declared just before invocation of third-party methods and determined an observation point.
+/\*@ObservationPoint\*/ must be declared just before invocation of third-party methods and determined an observation point.
 
-/*@SecurityPolicy(securityLevel="..", policyType="..")*/ must be declared just before arguments of third-party method invocations
+/\*@SecurityPolicy(securityLevel="..", policyType="..")\*/ must be declared just before arguments of third-party method invocations
 and specifies the mentioned arguments has which security level in addition to policy type
 
-/*@EntryPoint*/ must be declared before method declarations and determines the application starts from which point.
+/\*@EntryPoint\*/ must be declared before method declarations and determines the application starts from which point.
 
-/*@CheckPoint*/ must be declared before method declarations and determines check points.
+/\*@CheckPoint\*/ must be declared before method declarations and determines check points.
 
-/*@SecurityInit(securityLevel="..", policyType="..")*/ must be used just before methods parameter or class field declarations
+/\*@SecurityInit(securityLevel="..", policyType="..")\*/ must be used just before methods parameter or class field declarations
 and specifies the initial security level for the mentioned method parameter or class field.
 
 Annotations Example  : 
