@@ -2,28 +2,30 @@ INSTALL :
 1. Install REAX following the instructions in http://nberth.space/opam
 2. Build the project using maven.
 
-USAGE :
+
+I have polished the readme file. Please update it soon.
+
+Instructions:
+
 1. Annotate your java application using security annotations.
 2. Set the variables "sourcePath", "targetPath", "classPath", and "includingFilter" with proper values in the method "se.lnu.prosses.securityMonitor.Main.main"
-	* sourcePath indicates to the directory of your application source code
-	* targetPath indicates to the directory you want to save the outputs
-	* classPath indicates to all dependencies of your application including the directory of your application source code
-	* includingFilter indicates to a java regular expression determining the classes that should be processed. Other classes are mentioned as third-party classes.
+	* sourcePath is the directory of the application source code
+	* targetPath is the directory to save the outputs
+	* classPath points to all dependencies of your application including the directory of your application source code
+	* includingFilter is a java regular expression that shows the classes that should be processed. Other classes are mentioned as third-party classes.
 3. Build and run this application
 4. Put this application in your application class path and build and run yours
-
 SECURITY ANNOTATIONS :
 
-/\*@ObservationPoint\*/ must be declared just before invocation of third-party methods determining an observation point.
+/*@ObservationPoint*/ must be declared just before invocation of third-party methods and represents an observation point.
 
-/\*@SecurityPolicy(securityLevel="..", policyType="..")\*/ must be declared just before arguments of third-party method invocations specifying security level and policy type for the mentioned arguments.Explicit and implicit policy types are determined by the characters "X" and "L" respectively while the characters "L" and "H" are used to specify security levels low and high respectively. You may define explicit and implicit policy at the same time so that the first character of securityLevel and policyType are correspondent as well as the second ones are correspondent.
+/*@SecurityPolicy(securityLevel="..", policyType="..")*/ must be declared just before arguments of third-party method invocations and specifies security level and policy type of the method arguments. Explicit and implicit policy types are represented by the characters "X" and "L” respectively. The characters "L" and "H" are used to specify the security levels low and high respectively. 
 
-/\*@EntryPoint\*/ must be declared before method declarations determining the points that your application starts from.
+/*@EntryPoint*/ must be declared before method declarations and represents the points that your application starts from.
 
-/\*@CheckPoint\*/ must be declared before method declarations determining check points.
+/*@CheckPoint*/ must be declared before method declarations and represents a check point.
 
-/\*@SecurityInit(securityLevel="..", policyType="..")\*/ must be used just before methods parameter or class field declarations
-specifying the initial security level for the mentioned method parameter or class field.
+/*@SecurityInit(securityLevel="..", policyType="..")*/ must be used just before methods parameter or class field declarations and specifies the initial security level for the mentioned method parameter or class field.
 
 Annotations Example  : 
 
