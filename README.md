@@ -5,7 +5,7 @@ INSTALL :
 
 I have polished the readme file. Please update it soon.
 
-Instructions:
+INTRODUCTION :
 
 1. Annotate your java application using security annotations.
 2. Set the variables "sourcePath", "targetPath", "classPath", and "includingFilter" with proper values in the method "se.lnu.prosses.securityMonitor.Main.main"
@@ -15,6 +15,7 @@ Instructions:
 	* includingFilter is a java regular expression that shows the classes that should be processed. Other classes are mentioned as third-party classes.
 3. Build and run this application
 4. Put this application in your application class path and build and run yours
+
 SECURITY ANNOTATIONS :
 
 /*@ObservationPoint*/ must be declared just before invocation of third-party methods and represents an observation point.
