@@ -4,7 +4,7 @@ INSTALL :
 
 USAGE :
 1. Annotate your java application using security annotations.
-2. set the variables "sourcePath", "targetPath", "classPath", and "includingFilter" with proper values in the method "se.lnu.prosses.securityMonitor.Main.main"
+2. Set the variables "sourcePath", "targetPath", "classPath", and "includingFilter" with proper values in the method "se.lnu.prosses.securityMonitor.Main.main"
 	* sourcePath indicates to the directory of your application source code
 	* targetPath indicates to the directory you want to save the outputs
 	* classPath indicates to all dependencies of your application including the directory of your application source code
@@ -14,17 +14,16 @@ USAGE :
 
 SECURITY ANNOTATIONS :
 
-/\*@ObservationPoint\*/ must be declared just before invocation of third-party methods and determined an observation point.
+/\*@ObservationPoint\*/ must be declared just before invocation of third-party methods determining an observation point.
 
-/\*@SecurityPolicy(securityLevel="..", policyType="..")\*/ must be declared just before arguments of third-party method invocations
-and specifies the mentioned arguments has which security level in addition to policy type
+/\*@SecurityPolicy(securityLevel="..", policyType="..")\*/ must be declared just before arguments of third-party method invocations specifying security level and policy type for the mentioned arguments
 
-/\*@EntryPoint\*/ must be declared before method declarations and determines the application starts from which point.
+/\*@EntryPoint\*/ must be declared before method declarations determining the points that your application starts from.
 
-/\*@CheckPoint\*/ must be declared before method declarations and determines check points.
+/\*@CheckPoint\*/ must be declared before method declarations determining check points.
 
 /\*@SecurityInit(securityLevel="..", policyType="..")\*/ must be used just before methods parameter or class field declarations
-and specifies the initial security level for the mentioned method parameter or class field.
+specifying the initial security level for the mentioned method parameter or class field.
 
 Annotations Example  : 
 
