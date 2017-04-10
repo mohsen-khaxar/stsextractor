@@ -4,13 +4,11 @@ INSTALL :
 
 USAGE :
 1. Annotate your java application using security annotations.
-2. set the variables "sourcePath", "targetPath", "classPath", and "includingFilter" with proper values 
-in the method "se.lnu.prosses.securityMonitor.Main.main"
-    -sourcePath indicates to the directory of your application source code
-    -targetPath indicates to the directory you want to save the outputs
-    -classPath indicates to all dependencies of your application including the directory of your application source code
-    -includingFilter indicates to a java regular expression determining the classes that should be processed. 
-     Other classes are mentioned as third-party classes.
+2. set the variables "sourcePath", "targetPath", "classPath", and "includingFilter" with proper values in the method "se.lnu.prosses.securityMonitor.Main.main"
+	* sourcePath indicates to the directory of your application source code
+	* targetPath indicates to the directory you want to save the outputs
+	* classPath indicates to all dependencies of your application including the directory of your application source code
+	* includingFilter indicates to a java regular expression determining the classes that should be processed. Other classes are mentioned as third-party classes.
 3. Build and run our application
 4. Put our application in your application class path and build and run yours
 
