@@ -2,10 +2,7 @@ INSTALL :
 1. Install REAX following the instructions in http://nberth.space/opam
 2. Build the project using maven.
 
-
-I have polished the readme file. Please update it soon.
-
-INTRODUCTION :
+ INSTRUCTION :
 
 1. Annotate your java application using security annotations.
 2. Set the variables "sourcePath", "targetPath", "classPath", and "includingFilter" with proper values in the method "se.lnu.prosses.securityMonitor.Main.main"
